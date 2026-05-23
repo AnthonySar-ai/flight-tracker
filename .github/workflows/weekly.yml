@@ -2,8 +2,8 @@ name: Weekly Flight Tracker
 
 on:
   schedule:
-    # Every Monday at 08:00 UTC
-    - cron: "0 8 * * 1"
+    # Every Monday and Thusrday at 08:00 UTC
+    - cron: "0 8 * * 1,4"
   # Allows manual trigger from GitHub anytime
   workflow_dispatch:
 
