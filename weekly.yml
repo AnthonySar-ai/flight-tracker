@@ -2,9 +2,7 @@ name: Weekly Flight Tracker
 
 on:
   schedule:
-    # Every Monday at 08:00 UTC
-    - cron: "0 8 * * 1"
-  # Allows manual trigger from GitHub anytime
+    - cron: "0 8 * * 1,4"   # Every Monday and Thursday at 08:00 UTC
   workflow_dispatch:
 
 jobs:
@@ -28,10 +26,13 @@ jobs:
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
         run: python flight_tracker.py
 
+      - name: Generate Excel report
+        run: python generate_report.py
+
       - name: Commit updated data
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/flights.csv data/flights.db
-          git diff --staged --quiet || git commit -m "data: weekly update $(date -u +'%Y-%m-%d')"
+          git add data/flights.csv data/flights.db data/flight_report.xlsx data/no_results.csv
+          git diff --staged --quiet || git commit -m "data: update $(date -u +'%Y-%m-%d')"
           git push
