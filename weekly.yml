@@ -33,6 +33,6 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/flights.csv data/flights.db data/flight_report.xlsx data/no_results.csv
+          git add data//flights.csv data/flights.db data/flight_report.xlsx data/no_results.csv
           git diff --staged --quiet || git commit -m "data: update $(date -u +'%Y-%m-%d')"
           git push
