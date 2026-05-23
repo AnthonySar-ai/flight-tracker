@@ -1,39 +1,29 @@
 """
-Flight Price Tracker
-Route:   Nice (NCE) → Beirut (BEY), roundtrip
-Stay:    14 nights
+Flight Price Tracker — NCE → BEY roundtrip
+Tracks August and December/January windows, 14-night stay.
 
-Tracks two seasonal windows every year:
-  AUGUST      — departs Aug 1, 7, 14, 21  (returns 14 days later)
-  DEC/JAN     — departs Dec 13, 18, 20, 23 (returns 14 days later, early Jan)
-
-Runs every Monday via GitHub Actions.
-Uses ~32 SerpAPI calls/month — well within the 250/month free tier.
-Data accumulates forever in data/flights.csv and data/flights.db
+Extra signals tracked for Lebanon disruption awareness:
+  - airline_count: how many distinct airlines offered the route that week
+  - no_results_flag: logs explicitly when a tracked date returns zero offers
+  - price_change_pct: % change vs previous week for same depart_date (computed in store_data)
 """
 
 import os
 import requests
 from datetime import date, timedelta
-from store_data import save_flights
+from store_data import save_flights, log_no_results
 
 SERPAPI_KEY = os.environ["SERPAPI_KEY"]
 SERPAPI_URL = "https://serpapi.com/search"
 
 ORIGIN      = "NCE"
 DESTINATION = "BEY"
-STAY_DAYS   = 14  # 2-week trip
+STAY_DAYS   = 14
 
 
 def target_departures_for_year(year):
-    """
-    Returns the specific departure dates we care about for a given year.
-    August: 1st, 7th, 14th, 21st
-    December (→ early Jan return): 13th, 18th, 20th, 23rd
-    """
     august_days   = [1, 7, 14, 21]
     december_days = [13, 18, 20, 23]
-
     departures = []
     for d in august_days:
         departures.append(date(year, 8, d))
@@ -43,26 +33,16 @@ def target_departures_for_year(year):
 
 
 def get_dates_to_track():
-    """
-    Build the full list of (depart, return) pairs to query this week.
-    Always tracks the current year AND next year so we capture prices
-    as far ahead as possible from day one.
-    """
     today = date.today()
     pairs = []
-
     for year in [today.year, today.year + 1]:
         for depart in target_departures_for_year(year):
-            # Only track dates that are still in the future
             if depart > today:
-                ret = depart + timedelta(days=STAY_DAYS)
-                pairs.append((depart, ret))
-
+                pairs.append((depart, depart + timedelta(days=STAY_DAYS)))
     return pairs
 
 
 def search_flights(depart_date, return_date):
-    """Query SerpAPI Google Flights for one roundtrip."""
     params = {
         "engine":           "google_flights",
         "departure_id":     ORIGIN,
@@ -71,7 +51,7 @@ def search_flights(depart_date, return_date):
         "return_date":      return_date.strftime("%Y-%m-%d"),
         "currency":         "EUR",
         "hl":               "en",
-        "type":             "1",           # 1 = roundtrip
+        "type":             "1",
         "api_key":          SERPAPI_KEY,
     }
     resp = requests.get(SERPAPI_URL, params=params, timeout=30)
@@ -80,20 +60,24 @@ def search_flights(depart_date, return_date):
 
 
 def parse_results(data, depart_date, return_date, checked_at):
-    """Flatten SerpAPI response into a list of clean record dicts."""
     records = []
     all_flights = data.get("best_flights", []) + data.get("other_flights", [])
+
+    # Collect all unique airlines across all offers this week for this date
+    all_airlines_this_date = set()
 
     for flight in all_flights:
         price = flight.get("price")
         if price is None:
             continue
-
         legs = flight.get("flights", [])
         if not legs:
             continue
 
-        airlines  = sorted({leg.get("airline", "") for leg in legs if leg.get("airline")})
+        airlines = sorted({leg.get("airline", "") for leg in legs if leg.get("airline")})
+        for a in airlines:
+            all_airlines_this_date.add(a)
+
         out_dep   = legs[0].get("departure_airport", {}).get("time", "")
         out_arr   = legs[-1].get("arrival_airport", {}).get("time", "")
         out_dur   = flight.get("total_duration", "")
@@ -123,27 +107,38 @@ def parse_results(data, depart_date, return_date, checked_at):
             "ret_dep_time":  ret_dep,
             "ret_arr_time":  ret_arr,
             "ret_duration":  str(ret_dur),
+            # Disruption signals
+            "airline_count": len(all_airlines_this_date),
         })
 
-    return records
+    return records, all_airlines_this_date
 
 
 def main():
     from datetime import datetime
-    checked_at = date.today().strftime("%Y-%m-%d")
+    checked_at  = date.today().strftime("%Y-%m-%d")
     print(f"[{datetime.utcnow().isoformat()}] Flight tracker starting...")
 
     date_pairs  = get_dates_to_track()
     all_records = []
 
-    print(f"  Tracking {len(date_pairs)} departure dates this run:")
+    print(f"  Tracking {len(date_pairs)} departure dates:")
     for depart, ret in date_pairs:
-        print(f"  NCE→BEY  depart {depart}  return {ret} ...")
+        depart_str = depart.strftime("%Y-%m-%d")
+        ret_str    = ret.strftime("%Y-%m-%d")
+        print(f"  NCE→BEY  {depart_str} → {ret_str} ...")
         try:
             data    = search_flights(depart, ret)
-            records = parse_results(data, depart, ret, checked_at)
-            all_records.extend(records)
-            print(f"    → {len(records)} offers found")
+            records, airlines_seen = parse_results(data, depart, ret, checked_at)
+
+            if not records:
+                # Explicit no-results log — important for disruption detection
+                print(f"    ⚠ ZERO results for {depart_str} — logging as disruption signal")
+                log_no_results(checked_at, depart_str, ret_str)
+            else:
+                all_records.extend(records)
+                print(f"    → {len(records)} offers | {len(airlines_seen)} airlines: {', '.join(sorted(airlines_seen))}")
+
         except requests.HTTPError as e:
             print(f"    ⚠ HTTP {e.response.status_code}: {e.response.text[:200]}")
         except Exception as e:
