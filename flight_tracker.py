@@ -1,8 +1,13 @@
 """
 Flight Price Tracker — NCE → BEY roundtrip
-Tracks August and December/January windows, 14-night stay.
+Tracks:
+  AUGUST   — first 4 Saturdays, return 2 weeks later (Sat + Sun options)
+  XMAS     — Saturday before Dec 24 (shifted back if Dec 23+), return Sat+Sun 2 weeks later
+  Exception: 2028 Christmas → Dec 16 (Dec 24 is Sunday, would arrive Dec 23)
+
 Captures: price, airlines, flight numbers, times, duration, layover, stops.
 Disruption signals: airline_count, zero-result logging, price_change_pct.
+Runs twice a week via GitHub Actions (Mon + Thu).
 """
 
 import os
@@ -12,30 +17,67 @@ from store_data import save_flights, log_no_results
 
 SERPAPI_KEY = os.environ["SERPAPI_KEY"]
 SERPAPI_URL = "https://serpapi.com/search"
-
 ORIGIN      = "NCE"
 DESTINATION = "BEY"
-STAY_DAYS   = 14
 
 
-def target_departures_for_year(year):
-    august_days   = [1, 7, 14, 21]
-    december_days = [13, 18, 20, 23]
-    departures = []
-    for d in august_days:
-        departures.append(date(year, 8, d))
-    for d in december_days:
-        departures.append(date(year, 12, d))
-    return departures
+def get_august_departures(year):
+    """First 4 Saturdays of August."""
+    d = date(year, 8, 1)
+    while d.weekday() != 5:
+        d += timedelta(days=1)
+    sats = []
+    while d.month == 8 and len(sats) < 4:
+        sats.append(d)
+        d += timedelta(weeks=1)
+    return sats
+
+
+def get_christmas_departure(year):
+    """
+    Saturday before Dec 24.
+    If that Saturday falls on Dec 23 or later, shift back one week.
+    This ensures arrival well before Christmas Eve.
+    """
+    dec24 = date(year, 12, 24)
+    days_back = (dec24.weekday() + 2) % 7
+    if days_back == 0:
+        days_back = 7
+    sat = dec24 - timedelta(days=days_back)
+    if sat.day >= 23:
+        sat -= timedelta(weeks=1)
+    return sat
 
 
 def get_dates_to_track():
+    """
+    Build all (depart, return, season) tuples to query this run.
+    Each August departure gets 2 return options (Sat + Sun).
+    Each Christmas departure gets 2 return options (Sat + Sun).
+    Tracks current year and next year.
+    Only includes dates still in the future.
+    """
     today = date.today()
     pairs = []
+
     for year in [today.year, today.year + 1]:
-        for depart in target_departures_for_year(year):
-            if depart > today:
-                pairs.append((depart, depart + timedelta(days=STAY_DAYS)))
+        # August
+        for dep in get_august_departures(year):
+            if dep <= today:
+                continue
+            ret_sat = dep + timedelta(weeks=2)
+            ret_sun = ret_sat + timedelta(days=1)
+            pairs.append((dep, ret_sat, "August"))
+            pairs.append((dep, ret_sun, "August"))
+
+        # Christmas
+        dep = get_christmas_departure(year)
+        if dep > today:
+            ret_sat = dep + timedelta(weeks=2)
+            ret_sun = ret_sat + timedelta(days=1)
+            pairs.append((dep, ret_sat, "DecJan"))
+            pairs.append((dep, ret_sun, "DecJan"))
+
     return pairs
 
 
@@ -57,7 +99,6 @@ def search_flights(depart_date, return_date):
 
 
 def format_duration(minutes):
-    """Convert minutes to h:mm format."""
     if not minutes:
         return ""
     try:
@@ -67,7 +108,12 @@ def format_duration(minutes):
         return str(minutes)
 
 
-def parse_results(data, depart_date, return_date, checked_at):
+def clean_airline_name(name):
+    """Remove leading/trailing quotes and whitespace."""
+    return str(name).strip().strip('"').strip("'").strip()
+
+
+def parse_results(data, depart_date, return_date, season, checked_at):
     records = []
     all_flights = data.get("best_flights", []) + data.get("other_flights", [])
     all_airlines_this_date = set()
@@ -80,28 +126,33 @@ def parse_results(data, depart_date, return_date, checked_at):
         if not legs:
             continue
 
-        # ── Outbound leg ──────────────────────────────────────────────────
-        out_airlines     = []
-        out_flight_nums  = []
-        out_dep_time     = legs[0].get("departure_airport", {}).get("time", "")
-        out_arr_time     = legs[-1].get("arrival_airport", {}).get("time", "")
-        out_dur_min      = flight.get("total_duration", "")
-        out_stops        = len(legs) - 1
-        out_layover_min  = sum(
-            lay.get("duration", 0)
-            for lay in flight.get("layovers", [])
-        )
+        # Outbound
+        out_airlines    = []
+        out_flight_nums = []
+        out_dep_time    = legs[0].get("departure_airport", {}).get("time", "")
+        out_arr_time    = legs[-1].get("arrival_airport", {}).get("time", "")
+        out_dur_min     = flight.get("total_duration", "")
+        out_stops       = len(legs) - 1
+        out_layover_min = sum(lay.get("duration", 0) for lay in flight.get("layovers", []))
 
         for leg in legs:
-            airline = leg.get("airline", "")
-            fn      = leg.get("flight_number", "")
-            if airline:
-                out_airlines.append(airline)
-                all_airlines_this_date.add(airline)
+            a  = clean_airline_name(leg.get("airline", ""))
+            fn = leg.get("flight_number", "")
+            if a:
+                out_airlines.append(a)
+                all_airlines_this_date.add(a)
             if fn:
                 out_flight_nums.append(fn)
 
-        # ── Return leg ────────────────────────────────────────────────────
+        # Deduplicate airlines preserving order
+        seen = set()
+        out_airlines_dedup = []
+        for a in out_airlines:
+            if a not in seen:
+                seen.add(a)
+                out_airlines_dedup.append(a)
+
+        # Return
         ret_info        = flight.get("return_flights", {}) or {}
         ret_legs        = ret_info.get("flights", [])
         ret_airlines    = []
@@ -110,50 +161,42 @@ def parse_results(data, depart_date, return_date, checked_at):
         ret_arr_time    = ret_legs[-1].get("arrival_airport", {}).get("time", "") if ret_legs else ""
         ret_dur_min     = ret_info.get("total_duration", "")
         ret_stops       = len(ret_legs) - 1 if ret_legs else ""
-        ret_layover_min = sum(
-            lay.get("duration", 0)
-            for lay in ret_info.get("layovers", [])
-        )
+        ret_layover_min = sum(lay.get("duration", 0) for lay in ret_info.get("layovers", []))
 
         for leg in ret_legs:
-            airline = leg.get("airline", "")
-            fn      = leg.get("flight_number", "")
-            if airline:
-                ret_airlines.append(airline)
+            a  = clean_airline_name(leg.get("airline", ""))
+            fn = leg.get("flight_number", "")
+            if a:
+                ret_airlines.append(a)
             if fn:
                 ret_flight_nums.append(fn)
 
-        season = "August" if depart_date.month == 8 else "DecJan"
-
         records.append({
-            "checked_at":        checked_at,
-            "season":            season,
-            "depart_date":       depart_date.strftime("%Y-%m-%d"),
-            "return_date":       return_date.strftime("%Y-%m-%d"),
-            "price_eur":         float(price),
-            "airlines":          ", ".join(dict.fromkeys(out_airlines)),  # deduplicated, ordered
-            # Outbound
-            "out_flight_nums":   ", ".join(out_flight_nums),
-            "out_stops":         out_stops,
-            "out_dep_time":      out_dep_time,
-            "out_arr_time":      out_arr_time,
-            "out_duration":      str(out_dur_min),
-            "out_duration_fmt":  format_duration(out_dur_min),
-            "out_layover_min":   out_layover_min if out_stops > 0 else "",
-            "out_layover_fmt":   format_duration(out_layover_min) if out_stops > 0 else "",
-            # Return
-            "ret_airlines":      ", ".join(dict.fromkeys(ret_airlines)),
-            "ret_flight_nums":   ", ".join(ret_flight_nums),
-            "ret_stops":         ret_stops,
-            "ret_dep_time":      ret_dep_time,
-            "ret_arr_time":      ret_arr_time,
-            "ret_duration":      str(ret_dur_min),
-            "ret_duration_fmt":  format_duration(ret_dur_min),
-            "ret_layover_min":   ret_layover_min if ret_legs and ret_stops > 0 else "",
-            "ret_layover_fmt":   format_duration(ret_layover_min) if ret_legs and ret_stops and int(str(ret_stops) or 0) > 0 else "",
-            # Disruption signals
-            "airline_count":     len(all_airlines_this_date),
-            "price_change_pct":  "",  # filled by store_data
+            "checked_at":       checked_at,
+            "season":           season,
+            "depart_date":      depart_date.strftime("%Y-%m-%d"),
+            "return_date":      return_date.strftime("%Y-%m-%d"),
+            "price_eur":        float(price),
+            "airlines":         ", ".join(out_airlines_dedup),
+            "out_flight_nums":  ", ".join(out_flight_nums),
+            "out_stops":        out_stops,
+            "out_dep_time":     out_dep_time,
+            "out_arr_time":     out_arr_time,
+            "out_duration":     str(out_dur_min),
+            "out_duration_fmt": format_duration(out_dur_min),
+            "out_layover_min":  out_layover_min if out_stops > 0 else "",
+            "out_layover_fmt":  format_duration(out_layover_min) if out_stops > 0 else "",
+            "ret_airlines":     ", ".join(dict.fromkeys(ret_airlines)),
+            "ret_flight_nums":  ", ".join(ret_flight_nums),
+            "ret_stops":        ret_stops,
+            "ret_dep_time":     ret_dep_time,
+            "ret_arr_time":     ret_arr_time,
+            "ret_duration":     str(ret_dur_min),
+            "ret_duration_fmt": format_duration(ret_dur_min),
+            "ret_layover_min":  ret_layover_min if ret_legs and str(ret_stops) not in ("", "0") else "",
+            "ret_layover_fmt":  format_duration(ret_layover_min) if ret_legs and str(ret_stops) not in ("", "0") else "",
+            "airline_count":    len(all_airlines_this_date),
+            "price_change_pct": "",
         })
 
     return records, all_airlines_this_date
@@ -164,25 +207,23 @@ def main():
     checked_at  = date.today().strftime("%Y-%m-%d")
     print(f"[{datetime.utcnow().isoformat()}] Flight tracker starting...")
 
-    date_pairs  = get_dates_to_track()
+    pairs       = get_dates_to_track()
     all_records = []
 
-    print(f"  Tracking {len(date_pairs)} departure dates:")
-    for depart, ret in date_pairs:
+    print(f"  Tracking {len(pairs)} depart/return combinations:")
+    for depart, ret, season in pairs:
         depart_str = depart.strftime("%Y-%m-%d")
         ret_str    = ret.strftime("%Y-%m-%d")
-        print(f"  NCE→BEY  {depart_str} → {ret_str} ...")
+        print(f"  [{season}] NCE→BEY  {depart_str} → {ret_str} ...")
         try:
             data    = search_flights(depart, ret)
-            records, airlines_seen = parse_results(data, depart, ret, checked_at)
-
+            records, airlines_seen = parse_results(data, depart, ret, season, checked_at)
             if not records:
-                print(f"    ⚠ ZERO results for {depart_str} — logging as disruption signal")
+                print(f"    ⚠ ZERO results — logging disruption signal")
                 log_no_results(checked_at, depart_str, ret_str)
             else:
                 all_records.extend(records)
                 print(f"    → {len(records)} offers | {len(airlines_seen)} airlines: {', '.join(sorted(airlines_seen))}")
-
         except requests.HTTPError as e:
             print(f"    ⚠ HTTP {e.response.status_code}: {e.response.text[:200]}")
         except Exception as e:
