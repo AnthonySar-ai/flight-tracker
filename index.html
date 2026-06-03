@@ -38,7 +38,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .clrbtn{font-size:11px;padding:4px 9px;border-radius:7px;border:1.5px solid #fca5a5;background:#fff5f5;color:#dc2626;cursor:pointer}
 .rfbtn{font-size:11px;padding:4px 11px;border-radius:7px;border:1.5px solid #0f6e56;background:#f0fdf9;color:#0f6e56;cursor:pointer;font-weight:600}
 .tbl-wrap{overflow-x:auto;max-height:480px;overflow-y:auto}
-table{width:100%;border-collapse:collapse;font-size:12px;min-width:950px}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:900px}
 thead{position:sticky;top:0;z-index:2;background:white}
 thead tr{border-bottom:2px solid #f3f4f6}
 th{padding:7px 9px;text-align:left;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;cursor:pointer}
@@ -59,7 +59,12 @@ tr:hover td{background:#fafafa}
 .loader{text-align:center;padding:50px}
 .spinner{width:36px;height:36px;border:3px solid #f3f4f6;border-top-color:#0f6e56;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
 @keyframes spin{to{transform:rotate(360deg)}}
-.errbox{text-align:center;padding:50px}
+/* Heatmap */
+.hm-wrap{overflow-x:auto}
+.hm{border-collapse:collapse;font-size:11px;width:100%}
+.hm th{padding:6px 10px;font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;border:1px solid #f3f4f6;background:white;white-space:nowrap}
+.hm td{padding:6px 10px;border:1px solid #f3f4f6;text-align:center;font-weight:600;font-size:11px;min-width:72px}
+.hm .rl{text-align:left;background:#fafafa;white-space:nowrap;font-weight:600;color:#374151}
 canvas{max-height:280px}
 @media(max-width:640px){.grid2{grid-template-columns:1fr}}
 </style>
@@ -73,43 +78,50 @@ canvas{max-height:280px}
   </div>
 </div>
 <div class="container">
-  <div id="loader" class="loader"><div class="spinner"></div><p style="color:#9ca3af;font-size:13px">Fetching latest data from GitHub...</p></div>
-  <div id="errbox" class="errbox" style="display:none"><p id="errmsg" style="color:#6b7280;font-size:13px;margin-bottom:10px"></p><a href="#" onclick="loadData()" style="color:#0f6e56;font-size:12px">Try again</a></div>
+  <div id="loader" class="loader"><div class="spinner"></div><p style="color:#9ca3af;font-size:13px">Fetching latest data...</p></div>
+  <div id="errbox" style="display:none;text-align:center;padding:40px">
+    <p id="errmsg" style="color:#6b7280;font-size:13px;margin-bottom:10px"></p>
+    <a href="#" onclick="loadData()" style="color:#0f6e56;font-size:12px">Try again</a>
+  </div>
   <div id="main" style="display:none">
     <div class="stats" id="statsRow"></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:14px" id="insightRow"></div>
+    <!-- Season tabs -->
     <div class="trow" id="seasonTabs">
       <button class="tbtn s-all on" onclick="setSeason('all',this)">All seasons</button>
       <button class="tbtn s-aug" onclick="setSeason('August',this)">☀ August</button>
       <button class="tbtn s-dec" onclick="setSeason('DecJan',this)">🎄 Dec / Jan</button>
     </div>
+    <!-- Trend -->
     <div class="card">
       <div class="ctitle"><span class="dot" style="background:#0f6e56"></span>Price trend over time — cheapest per week per departure date</div>
       <div class="trow" id="depToggle"></div>
       <canvas id="trendChart"></canvas>
     </div>
+    <!-- Heatmap + Range -->
     <div class="grid2" style="margin-bottom:14px">
       <div class="card">
-        <div class="ctitle"><span class="dot" style="background:#dc2626"></span>Price evolution — select dates to compare</div>
-        <div class="trow" id="evoToggle"></div>
-        <canvas id="evoChart"></canvas>
+        <div class="ctitle"><span class="dot" style="background:#dc2626"></span>Price heatmap — cheapest per departure per week (green=cheap · red=expensive)</div>
+        <div class="hm-wrap"><div id="hmWrap"><div class="empty">Loading...</div></div></div>
       </div>
       <div class="card">
         <div class="ctitle"><span class="dot" style="background:#7c3aed"></span>Price range per departure — min / avg / max</div>
         <canvas id="rangeChart"></canvas>
       </div>
     </div>
+    <!-- Book timing + Airlines -->
     <div class="grid2" style="margin-bottom:14px">
       <div class="card">
         <div class="ctitle"><span class="dot" style="background:#d97706"></span>Best time to book — avg price by weeks before departure</div>
         <canvas id="bookChart"></canvas>
-        <div id="bookEmpty" style="display:none;text-align:center;padding:14px;font-size:11px;color:#9ca3af">Needs more weeks of data</div>
+        <div id="bookEmpty" style="display:none;text-align:center;padding:14px;font-size:11px;color:#9ca3af">Needs more weeks of data to show this chart</div>
       </div>
       <div class="card">
         <div class="ctitle"><span class="dot" style="background:#0891b2"></span>Airlines — avg price &amp; times cheapest</div>
         <div class="grid2"><canvas id="airAvgChart"></canvas><canvas id="airCheapChart"></canvas></div>
       </div>
     </div>
+    <!-- Table -->
     <div class="card">
       <div class="ctitle"><span class="dot" style="background:#d97706"></span>All collected offers <span id="offerCount" style="font-size:11px;color:#d1d5db;font-weight:400;text-transform:none;letter-spacing:0"></span></div>
       <div class="fbar"><label>Dates</label><div class="trow" id="tableDepToggle" style="margin-bottom:0;gap:5px"></div></div>
@@ -131,47 +143,52 @@ canvas{max-height:280px}
       <div class="tbl-wrap">
         <table>
           <thead><tr>
-            <th onclick="setSort('checked_at',null)">Week ↕</th><th>Season</th>
-            <th onclick="setSort('depart_date',null)">Depart ↕</th><th>Return</th>
-            <th onclick="setSort('price_eur',null)">Price € ↕</th><th>Chg</th>
-            <th>Airline(s)</th><th>Flight nos.</th>
+            <th onclick="setSort('checked_at',null)">Week ↕</th>
+            <th>Season</th>
+            <th onclick="setSort('depart_date',null)">Depart ↕</th>
+            <th>Return</th>
+            <th onclick="setSort('price_eur',null)">Price € ↕</th>
+            <th>Chg</th>
+            <th>Airline(s)</th>
+            <th>Flight nos.</th>
             <th onclick="setSort('out_stops',null)">Stops ↕</th>
-            <th>Dep time</th><th>Arr time</th>
-            <th onclick="setSort('out_duration',null)">Duration ↕</th><th>Layover</th>
-            <th>↩ Ret dep</th><th>↩ Ret arr</th><th>↩ Ret dur</th><th>↩ Ret layover</th>
+            <th>Dep time</th>
+            <th>Arr time</th>
+            <th onclick="setSort('out_duration',null)">Duration ↕</th>
+            <th>Layover</th>
           </tr></thead>
           <tbody id="tableBody"></tbody>
         </table>
       </div>
+      <p style="font-size:10px;color:#9ca3af;margin-top:8px;padding:0 4px">ℹ Return leg details (ret dep/arr/dur) will appear after the next tracker run — SerpAPI return data starts collecting from the updated tracker.</p>
     </div>
   </div>
 </div>
 <script>
 const GITHUB_USER = location.hostname.split('.')[0];
-const REPO = 'flight-tracker';
-const CSV_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${REPO}/main/data/flights.csv`;
+const CSV_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/flight-tracker/main/data/flights.csv`;
 
 let allData=[], activeSeason='all';
-let activeTrendDeps=new Set(), activeEvoDeps=new Set(), activeTableDeps=new Set();
+let activeTrendDeps=new Set(), activeTableDeps=new Set();
 let sortCol='price_eur', sortAsc=true;
-let trendChart, evoChart, rangeChart, bookChart, airAvgChart, airCheapChart;
+let trendChart, rangeChart, bookChart, airAvgChart, airCheapChart;
 const C=['#0f6e56','#1e5ba8','#7c3aed','#d97706','#dc2626','#0891b2','#16a34a','#9333ea','#c2410c','#db2777'];
 
-const fmtDate = d => {
-  if(!d||d==='nan') return '—';
+// ── Date / time helpers ───────────────────────────────────────────────────────
+function fmtDate(d) {
+  if(!d||String(d).trim()===''||d==='nan') return '—';
   const p = String(d).split(' ')[0].split('-');
   return p.length===3 ? `${p[2]}-${p[1]}-${p[0]}` : d;
-};
-const fmtTime = dt => {
+}
+function fmtTime(dt) {
   if(!dt||String(dt).trim()===''||dt==='nan'||dt==='NaN') return '—';
   const parts = String(dt).trim().split(' ');
-  // If it contains a space, second part is time; otherwise treat whole thing as time
-  return parts.length>=2 ? parts[1] : parts[0];
-};
-const clean = s => String(s||'').replace(/^["']+|["']+$/g,'').trim();
-const dash = v => (!v||v===''||v==='nan'||v==='NaN') ? '—' : v;
+  return parts.length >= 2 ? parts[1] : (parts[0].includes(':') ? parts[0] : '—');
+}
+function clean(s) { return String(s||'').replace(/^["']+|["']+$/g,'').trim(); }
 
-function splitCSVLine(line) {
+// ── CSV parser — detects old vs new format by column count ───────────────────
+function splitLine(line) {
   const res=[];let cur='',inQ=false;
   for(let i=0;i<line.length;i++){
     const c=line[i];
@@ -183,75 +200,69 @@ function splitCSVLine(line) {
   return res;
 }
 
+// Old format (14 cols): checked_at,season,depart_date,return_date,price_eur,airlines,out_stops,out_dep_time,out_arr_time,out_duration,ret_stops,ret_dep_time,ret_arr_time,ret_duration
+// New format (25 cols): checked_at,season,depart_date,return_date,price_eur,airlines,out_flight_nums,out_stops,out_dep_time,out_arr_time,out_duration,out_duration_fmt,out_layover_min,out_layover_fmt,ret_airlines,ret_flight_nums,ret_stops,ret_dep_time,ret_arr_time,ret_duration,ret_duration_fmt,ret_layover_min,ret_layover_fmt,airline_count,price_change_pct
+
+const OLD_HDRS = ['checked_at','season','depart_date','return_date','price_eur','airlines','out_stops','out_dep_time','out_arr_time','out_duration','ret_stops','ret_dep_time','ret_arr_time','ret_duration'];
+const NEW_HDRS = ['checked_at','season','depart_date','return_date','price_eur','airlines','out_flight_nums','out_stops','out_dep_time','out_arr_time','out_duration','out_duration_fmt','out_layover_min','out_layover_fmt','ret_airlines','ret_flight_nums','ret_stops','ret_dep_time','ret_arr_time','ret_duration','ret_duration_fmt','ret_layover_min','ret_layover_fmt','airline_count','price_change_pct'];
+
 function parseCSV(text) {
   const lines = text.trim().split('\n').filter(l=>l.trim());
-  if(lines.length<2) return [];
-  const hdrs = splitCSVLine(lines[0]).map(h=>h.replace(/\r/,'').trim());
+  if(lines.length < 2) return [];
 
-  console.log('CSV headers found:', hdrs);
+  // Read actual headers from first line
+  const fileHdrs = splitLine(lines[0]).map(h=>h.replace(/\r/,'').trim());
+  const isNewFormat = fileHdrs.includes('out_flight_nums');
 
   return lines.slice(1).map(line => {
-    const vals = splitCSVLine(line.replace(/\r/,''));
+    const vals = splitLine(line.replace(/\r/,''));
     const obj = {};
-    hdrs.forEach((h,i) => obj[h] = vals[i] !== undefined ? vals[i].trim() : '');
 
-    // Core fields
-    obj.price_eur    = parseFloat(obj.price_eur) || 0;
-    obj.out_stops    = obj.out_stops !== '' ? parseInt(obj.out_stops) : null;
-    obj.out_duration = obj.out_duration !== '' ? parseInt(obj.out_duration) : null;
-    obj.price_change_pct = obj.price_change_pct !== '' ? parseFloat(obj.price_change_pct) : null;
-    obj.airlines     = clean(obj.airlines || '');
+    // Map using actual file headers
+    fileHdrs.forEach((h,i) => { obj[h] = vals[i] !== undefined ? vals[i].trim() : ''; });
 
-    // Flight numbers — directly from column
-    obj._fn = dash(obj.out_flight_nums);
+    // Detect row format by column count (mixed CSV has both old and new rows)
+    const isNewRow = vals.length >= 20;
 
-    // Outbound duration — use pre-formatted if available, else compute
-    const odur = obj.out_duration_fmt && obj.out_duration_fmt !== ''
+    obj.price_eur         = parseFloat(obj.price_eur) || 0;
+    obj.out_stops         = obj.out_stops !== '' ? parseInt(obj.out_stops) : null;
+    obj.out_duration      = obj.out_duration !== '' ? parseInt(obj.out_duration) : null;
+    obj.price_change_pct  = (obj.price_change_pct !== '' && obj.price_change_pct !== undefined) ? parseFloat(obj.price_change_pct) : null;
+    obj.airlines          = clean(obj.airlines || '');
+
+    // Flight numbers — only in new rows
+    obj._fn = isNewRow && obj.out_flight_nums ? obj.out_flight_nums : '';
+
+    // Outbound duration formatted
+    obj._out_dur = (isNewRow && obj.out_duration_fmt && obj.out_duration_fmt !== '')
       ? obj.out_duration_fmt
       : (obj.out_duration ? Math.floor(obj.out_duration/60)+'h'+(obj.out_duration%60).toString().padStart(2,'0') : '—');
-    obj._out_dur = odur;
 
     // Outbound layover
-    const olay = obj.out_layover_fmt && obj.out_layover_fmt !== ''
+    obj._out_lay = (isNewRow && obj.out_layover_fmt && obj.out_layover_fmt !== '')
       ? obj.out_layover_fmt
-      : (obj.out_layover_min && obj.out_layover_min !== '' ? Math.floor(parseInt(obj.out_layover_min)/60)+'h'+(parseInt(obj.out_layover_min)%60).toString().padStart(2,'0') : '—');
-    obj._out_lay = olay;
-
-    // Return times — from ret_dep_time / ret_arr_time columns
-    obj._ret_dep = obj.ret_dep_time || '';
-    obj._ret_arr = obj.ret_arr_time || '';
-
-    // Return duration
-    const rdur = obj.ret_duration_fmt && obj.ret_duration_fmt !== ''
-      ? obj.ret_duration_fmt
-      : (obj.ret_duration && obj.ret_duration !== '' && !isNaN(parseInt(obj.ret_duration))
-          ? Math.floor(parseInt(obj.ret_duration)/60)+'h'+(parseInt(obj.ret_duration)%60).toString().padStart(2,'0')
+      : (isNewRow && obj.out_layover_min && obj.out_layover_min !== ''
+          ? Math.floor(parseInt(obj.out_layover_min)/60)+'h'+(parseInt(obj.out_layover_min)%60).toString().padStart(2,'0')
           : '—');
-    obj._ret_dur = rdur;
-
-    // Return layover
-    const rlay = obj.ret_layover_fmt && obj.ret_layover_fmt !== ''
-      ? obj.ret_layover_fmt
-      : (obj.ret_layover_min && obj.ret_layover_min !== '' ? Math.floor(parseInt(obj.ret_layover_min)/60)+'h'+(parseInt(obj.ret_layover_min)%60).toString().padStart(2,'0') : '—');
-    obj._ret_lay = rlay;
 
     return obj;
   }).filter(r => r.price_eur > 0 && r.depart_date);
 }
 
+// ── Fetch ─────────────────────────────────────────────────────────────────────
 async function loadData() {
   document.getElementById('loader').style.display='block';
   document.getElementById('errbox').style.display='none';
   document.getElementById('main').style.display='none';
   setBadge('loading','Loading...');
   try {
-    const r = await fetch(CSV_URL+'?t='+Date.now());
-    if(!r.ok) throw new Error(`HTTP ${r.status} — check flights.csv exists in data/ folder`);
-    const text = await r.text();
+    const resp = await fetch(CSV_URL+'?t='+Date.now());
+    if(!resp.ok) throw new Error(`HTTP ${resp.status} — check flights.csv exists in data/ folder`);
+    const text = await resp.text();
     const parsed = parseCSV(text);
-    if(!parsed.length) throw new Error('No valid data rows found');
+    if(!parsed.length) throw new Error('No valid data rows found in CSV');
     allData = parsed;
-    activeTrendDeps.clear(); activeEvoDeps.clear(); activeTableDeps.clear();
+    activeTrendDeps.clear(); activeTableDeps.clear();
     document.getElementById('loader').style.display='none';
     document.getElementById('main').style.display='block';
     const weeks=[...new Set(parsed.map(r=>r.checked_at))].sort();
@@ -260,7 +271,7 @@ async function loadData() {
   } catch(e) {
     document.getElementById('loader').style.display='none';
     document.getElementById('errbox').style.display='block';
-    document.getElementById('errmsg').textContent='Error: '+e.message;
+    document.getElementById('errmsg').textContent = 'Error: '+e.message;
     setBadge('err','Failed to load');
     console.error(e);
   }
@@ -268,9 +279,10 @@ async function loadData() {
 function setBadge(cls,txt){const b=document.getElementById('badge');b.className='badge '+cls;b.textContent=txt;}
 function getFiltered(){return allData.filter(r=>activeSeason==='all'||r.season===activeSeason);}
 
+// ── Stats ─────────────────────────────────────────────────────────────────────
 function renderStats(data){
   const prices=data.map(r=>r.price_eur);
-  const min=Math.min(...prices),avg=Math.round(prices.reduce((a,b)=>a+b,0)/prices.length);
+  const min=Math.min(...prices), avg=Math.round(prices.reduce((a,b)=>a+b,0)/prices.length);
   const weeks=[...new Set(data.map(r=>r.checked_at))].length;
   const airs=[...new Set(data.map(r=>r.airlines).filter(Boolean))].length;
   const minR=data.find(r=>r.price_eur===min);
@@ -282,6 +294,7 @@ function renderStats(data){
     <div class="stat"><div class="lbl">Airlines seen</div><div class="val">${airs}</div></div>`;
 }
 
+// ── Insights ──────────────────────────────────────────────────────────────────
 function renderInsights(data){
   const byDate={};
   data.forEach(r=>{if(!byDate[r.depart_date])byDate[r.depart_date]=[];byDate[r.depart_date].push({w:r.checked_at,p:r.price_eur});});
@@ -307,11 +320,12 @@ function renderInsights(data){
     <div class="ins warn"><div class="it">⚠ Rising price</div><div class="iv">${rDate?fmtDate(rDate.dep)+' (+'+rDate.pct+'%)':'None detected'}</div><div class="is">${rDate?'Watch closely':'No significant rises'}</div></div>`;
 }
 
+// ── Toggle builder ────────────────────────────────────────────────────────────
 function buildToggle(data,cid,activeSet,cb,mode){
   const dates=[...new Set(data.map(r=>r.depart_date))].sort();
   const el=document.getElementById(cid);
   el.innerHTML='';
-  if((mode==='trend'||mode==='evo')&&activeSet.size===0) dates.slice(0,4).forEach(d=>activeSet.add(d));
+  if(mode==='trend'&&activeSet.size===0) dates.slice(0,4).forEach(d=>activeSet.add(d));
   dates.forEach(dep=>{
     const s=(data.find(r=>r.depart_date===dep)||{}).season||'August';
     const btn=document.createElement('button');
@@ -322,17 +336,7 @@ function buildToggle(data,cid,activeSet,cb,mode){
   });
 }
 
-function makeLineChart(canvasId, weeks, datasets, old){
-  if(old) old.destroy();
-  return new Chart(document.getElementById(canvasId),{
-    type:'line',data:{labels:weeks.map(fmtDate),datasets},
-    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8}},
-      tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': €'+(ctx.parsed.y||0).toFixed(0),title:ctx=>'Week: '+ctx[0].label}}},
-      scales:{y:{ticks:{callback:v=>'€'+v,font:{size:11}},grid:{color:'rgba(0,0,0,0.05)'}},
-              x:{ticks:{font:{size:10},maxRotation:45},grid:{display:false}}}}
-  });
-}
-
+// ── Trend chart ───────────────────────────────────────────────────────────────
 function renderTrend(data){
   const weeks=[...new Set(data.map(r=>r.checked_at))].sort();
   let ci=0;
@@ -340,27 +344,71 @@ function renderTrend(data){
     const dd=data.filter(r=>r.depart_date===dep);
     if(!dd.length) return null;
     const color=dd[0].season==='August'?C[ci%4]:C[4+ci%4]; ci++;
-    return{label:fmtDate(dep)+(dd[0].season==='August'?' ☀':' 🎄'),
+    return{
+      label:fmtDate(dep)+(dd[0].season==='August'?' ☀':' 🎄'),
       data:weeks.map(w=>{const wd=dd.filter(r=>r.checked_at===w);return wd.length?Math.min(...wd.map(r=>r.price_eur)):null;}),
-      borderColor:color,backgroundColor:color+'12',tension:0.35,pointRadius:5,pointHoverRadius:7,borderWidth:2.5,spanGaps:true};
+      borderColor:color,backgroundColor:color+'12',tension:0.35,
+      pointRadius:5,pointHoverRadius:7,borderWidth:2.5,spanGaps:true
+    };
   }).filter(Boolean);
-  trendChart=makeLineChart('trendChart',weeks,datasets,trendChart);
+  if(trendChart) trendChart.destroy();
+  trendChart=new Chart(document.getElementById('trendChart'),{type:'line',
+    data:{labels:weeks.map(fmtDate),datasets},
+    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8}},
+      tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': €'+(ctx.parsed.y||0).toFixed(0),title:ctx=>'Week: '+ctx[0].label}}},
+      scales:{y:{ticks:{callback:v=>'€'+v,font:{size:11}},grid:{color:'rgba(0,0,0,0.05)'}},
+              x:{ticks:{font:{size:10},maxRotation:45},grid:{display:false}}}}
+  });
 }
 
-function renderEvo(data){
+// ── Heatmap ───────────────────────────────────────────────────────────────────
+function renderHeatmap(data){
+  const dates=[...new Set(data.map(r=>r.depart_date))].sort();
   const weeks=[...new Set(data.map(r=>r.checked_at))].sort();
-  let ci=0;
-  const datasets=[...activeEvoDeps].sort().map(dep=>{
-    const dd=data.filter(r=>r.depart_date===dep);
-    if(!dd.length) return null;
-    const color=dd[0].season==='August'?C[ci%4]:C[4+ci%4]; ci++;
-    return{label:fmtDate(dep)+(dd[0].season==='August'?' ☀':' 🎄'),
-      data:weeks.map(w=>{const wd=dd.filter(r=>r.checked_at===w);return wd.length?Math.min(...wd.map(r=>r.price_eur)):null;}),
-      borderColor:color,backgroundColor:color+'12',tension:0.3,pointRadius:5,borderWidth:2,spanGaps:true};
-  }).filter(Boolean);
-  evoChart=makeLineChart('evoChart',weeks,datasets,evoChart);
+  // cheapest per date+week
+  const grid={};
+  data.forEach(r=>{
+    const k=r.depart_date+'|'+r.checked_at;
+    if(!grid[k]||r.price_eur<grid[k]) grid[k]=r.price_eur;
+  });
+  const allP=Object.values(grid).filter(Boolean);
+  const gmin=Math.min(...allP), gmax=Math.max(...allP);
+
+  function pColor(p){
+    if(!p) return '#f9fafb';
+    const t=(p-gmin)/(gmax-gmin||1);
+    // green (cheap) → yellow → red (expensive)
+    const r=Math.round(63 + t*(239-63));
+    const g=Math.round(188 - t*(188-68));
+    const b=Math.round(118 - t*(118-68));
+    return `rgb(${r},${g},${b})`;
+  }
+  function tColor(p){
+    if(!p) return '#9ca3af';
+    return (p-gmin)/(gmax-gmin||1) > 0.55 ? 'white' : '#1a1a2e';
+  }
+
+  let html='<table class="hm"><thead><tr><th>Departure</th>';
+  weeks.forEach(w=>html+=`<th>${fmtDate(w)}</th>`);
+  html+='</tr></thead><tbody>';
+  dates.forEach(dep=>{
+    const s=(data.find(r=>r.depart_date===dep)||{}).season||'August';
+    html+=`<tr><td class="rl">${s==='August'?'☀ ':'🎄 '}${fmtDate(dep)}</td>`;
+    weeks.forEach(w=>{
+      const p=grid[dep+'|'+w];
+      if(p){
+        html+=`<td style="background:${pColor(p)};color:${tColor(p)}" title="${fmtDate(dep)} · ${fmtDate(w)} · €${p}">€${p}</td>`;
+      } else {
+        html+='<td style="color:#e5e7eb">—</td>';
+      }
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  document.getElementById('hmWrap').innerHTML=html;
 }
 
+// ── Range chart ───────────────────────────────────────────────────────────────
 function renderRange(data){
   const byDate={};
   data.forEach(r=>{if(!byDate[r.depart_date])byDate[r.depart_date]=[];byDate[r.depart_date].push(r.price_eur);});
@@ -380,6 +428,7 @@ function renderRange(data){
   });
 }
 
+// ── Best time to book ─────────────────────────────────────────────────────────
 function renderBook(data){
   const empty=document.getElementById('bookEmpty');
   const byW={};
@@ -397,8 +446,10 @@ function renderBook(data){
   const counts=keys.map(k=>byW[k].length);
   if(bookChart) bookChart.destroy();
   bookChart=new Chart(document.getElementById('bookChart'),{type:'line',
-    data:{labels:keys.map(k=>k+'w before'),datasets:[{label:'Avg price',data:avgs,
-      borderColor:'#d97706',backgroundColor:'#d9770612',tension:0.3,pointRadius:5,borderWidth:2.5}]},
+    data:{labels:keys.map(k=>k+'w before'),datasets:[{
+      label:'Avg price',data:avgs,borderColor:'#d97706',backgroundColor:'#d9770612',
+      tension:0.3,pointRadius:5,borderWidth:2.5
+    }]},
     options:{responsive:true,plugins:{legend:{display:false},
       tooltip:{callbacks:{label:ctx=>'€'+ctx.parsed.y+' avg ('+counts[ctx.dataIndex]+' offers)'}}},
       scales:{y:{ticks:{callback:v=>'€'+v,font:{size:11}},grid:{color:'rgba(0,0,0,0.05)'}},
@@ -406,28 +457,33 @@ function renderBook(data){
   });
 }
 
+// ── Airline charts ────────────────────────────────────────────────────────────
 function renderAirlines(data){
   const m={};
   data.forEach(r=>{const a=clean(r.airlines);if(!a)return;if(!m[a])m[a]={p:[],c:0};m[a].p.push(r.price_eur);});
   const grp={};
   data.forEach(r=>{const k=r.checked_at+'|'+r.depart_date;if(!grp[k]||r.price_eur<grp[k].p)grp[k]={p:r.price_eur,a:clean(r.airlines)};});
   Object.values(grp).forEach(({a})=>{if(m[a])m[a].c++;});
-  const byAvg=Object.keys(m).filter(Boolean).sort((a,b)=>m[a].p.reduce((x,y)=>x+y,0)/m[a].p.length-m[b].p.reduce((x,y)=>x+y,0)/m[b].p.length);
+  const byAvg=Object.keys(m).filter(Boolean).sort((a,b)=>
+    m[a].p.reduce((x,y)=>x+y,0)/m[a].p.length - m[b].p.reduce((x,y)=>x+y,0)/m[b].p.length);
   const avgs=byAvg.map(a=>Math.round(m[a].p.reduce((x,y)=>x+y,0)/m[a].p.length));
   const byCheap=[...byAvg].sort((a,b)=>m[b].c-m[a].c);
   const cheapC=byCheap.map(a=>m[a].c);
   if(airAvgChart) airAvgChart.destroy();
   airAvgChart=new Chart(document.getElementById('airAvgChart'),{type:'bar',
     data:{labels:byAvg,datasets:[{data:avgs,backgroundColor:byAvg.map((_,i)=>C[i%C.length]+'cc'),borderRadius:4}]},
-    options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'€'+ctx.parsed.x+' avg'}}},
+    options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:ctx=>'€'+ctx.parsed.x+' avg'}}},
       scales:{x:{ticks:{callback:v=>'€'+v,font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
   if(airCheapChart) airCheapChart.destroy();
   airCheapChart=new Chart(document.getElementById('airCheapChart'),{type:'bar',
     data:{labels:byCheap,datasets:[{data:cheapC,backgroundColor:'#0891b2cc',borderRadius:4}]},
-    options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.x+'× cheapest'}}},
+    options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:ctx=>ctx.parsed.x+'× cheapest'}}},
       scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
 }
 
+// ── Table ─────────────────────────────────────────────────────────────────────
 function populateAirlineFilter(data){
   const sel=document.getElementById('fAirline'),cur=sel.value;
   const airlines=[...new Set(data.map(r=>clean(r.airlines)).filter(Boolean))].sort();
@@ -465,7 +521,7 @@ function applyFilters(){
     return '—';
   };
   const chg=v=>{
-    if(v===null||v===undefined||v===''||isNaN(v)) return '<span class="cfl">—</span>';
+    if(v===null||v===undefined||v===''||isNaN(parseFloat(v))) return '<span class="cfl">—</span>';
     const n=parseFloat(v);
     return n>5?`<span class="cup">▲${Math.abs(n).toFixed(1)}%</span>`:
            n<-3?`<span class="cdn">▼${Math.abs(n).toFixed(1)}%</span>`:
@@ -473,12 +529,12 @@ function applyFilters(){
   };
   const pCls=p=>p<500?'plo':p>900?'phi':'pmd';
   const fnHtml=f=>{
-    if(!f||f==='—'||f==='') return '—';
+    if(!f||f.trim()==='') return '<span style="color:#d1d5db;font-size:10px">old data</span>';
     return String(f).split(/[,;]\s*/).filter(Boolean).map(n=>`<span class="fn">${n.trim()}</span>`).join('');
   };
 
   if(!f.length){
-    document.getElementById('tableBody').innerHTML='<tr><td colspan="17" class="empty">No offers match your filters</td></tr>';
+    document.getElementById('tableBody').innerHTML='<tr><td colspan="13" class="empty">No offers match your filters</td></tr>';
     return;
   }
   document.getElementById('tableBody').innerHTML=f.slice(0,300).map(r=>`
@@ -496,10 +552,6 @@ function applyFilters(){
       <td style="color:#6b7280">${fmtTime(r.out_arr_time)}</td>
       <td>${r._out_dur}</td>
       <td style="color:#d97706">${r._out_lay}</td>
-      <td style="font-weight:500">${fmtTime(r._ret_dep)}</td>
-      <td style="color:#6b7280">${fmtTime(r._ret_arr)}</td>
-      <td>${r._ret_dur}</td>
-      <td style="color:#d97706">${r._ret_lay}</td>
     </tr>`).join('');
 }
 
@@ -518,17 +570,21 @@ function clearFilters(){
   applyFilters();
 }
 function setSeason(s,el){
-  activeSeason=s; activeTrendDeps.clear(); activeEvoDeps.clear(); activeTableDeps.clear();
+  activeSeason=s; activeTrendDeps.clear(); activeTableDeps.clear();
   document.querySelectorAll('#seasonTabs .tbtn').forEach(t=>t.classList.remove('on'));
   el.classList.add('on'); renderAll();
 }
 function renderAll(){
   const data=getFiltered();
   if(!data.length) return;
-  renderStats(data); renderInsights(data);
-  buildToggle(data,'depToggle',activeTrendDeps,()=>renderTrend(data),'trend'); renderTrend(data);
-  buildToggle(data,'evoToggle',activeEvoDeps,()=>renderEvo(data),'evo'); renderEvo(data);
-  renderRange(data); renderBook(data); renderAirlines(data);
+  renderStats(data);
+  renderInsights(data);
+  buildToggle(data,'depToggle',activeTrendDeps,()=>renderTrend(data),'trend');
+  renderTrend(data);
+  renderHeatmap(data);
+  renderRange(data);
+  renderBook(data);
+  renderAirlines(data);
   populateAirlineFilter(data);
   buildToggle(data,'tableDepToggle',activeTableDeps,applyFilters,'table');
   applyFilters();
