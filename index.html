@@ -132,7 +132,7 @@ canvas{max-height:280px}
         <button class="sbtn on" onclick="setSort('price_eur',this)">Price ↕</button>
         <button class="sbtn" onclick="setSort('depart_date',this)">Dep date ↕</button>
         <button class="sbtn" onclick="setSort('checked_at',this)">Week ↕</button>
-        <button class="sbtn" onclick="setSort('_out_dur_mins',this)">Duration ↕</button>
+        <button class="sbtn" onclick="setSort('out_duration',this)">Duration ↕</button>
         <button class="clrbtn" onclick="clearFilters()">✕ Clear</button>
       </div>
       <div class="tbl-wrap">
@@ -146,10 +146,10 @@ canvas{max-height:280px}
             <th>Chg</th>
             <th>Airline(s)</th>
             <th>Flight nos.</th>
-            <th onclick="setSort('_stops_num',null)">Stops ↕</th>
+            <th onclick="setSort('out_stops',null)">Stops ↕</th>
             <th>Dep time</th>
             <th>Arr time</th>
-            <th onclick="setSort('_out_dur_mins',null)">Duration ↕</th>
+            <th onclick="setSort('out_duration',null)">Duration ↕</th>
             <th>Layover</th>
             <th>↩ Ret dep</th>
             <th>↩ Ret arr</th>
@@ -172,24 +172,32 @@ let sortCol='price_eur', sortAsc=true;
 let trendChart, rangeChart, bookChart, airAvgChart, airCheapChart;
 const C=['#0f6e56','#1e5ba8','#7c3aed','#d97706','#dc2626','#0891b2','#16a34a','#9333ea','#c2410c','#db2777'];
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtDate = d => {
   if(!d||String(d).trim()===''||d==='nan') return '—';
-  const p=String(d).split(' ')[0].split('-');
-  return p.length===3?`${p[2]}-${p[1]}-${p[0]}`:d;
+  const p = String(d).split(' ')[0].split('-');
+  return p.length===3 ? `${p[2]}-${p[1]}-${p[0]}` : d;
 };
 const fmtTime = dt => {
   if(!dt||String(dt).trim()===''||dt==='nan'||dt==='NaN') return '—';
-  const s=String(dt).trim();
-  // Format: "2026-08-01 14:45" → "14:45", or already "14:45" → "14:45"
-  const parts=s.split(' ');
-  if(parts.length>=2) return parts[1];
-  return s.includes(':') ? s : '—';
+  const s = String(dt).trim();
+  const parts = s.split(' ');
+  // "2026-08-01 14:45" → "14:45"
+  if(parts.length >= 2 && parts[1].includes(':')) return parts[1];
+  // already "14:45"
+  if(parts[0].includes(':')) return parts[0];
+  return '—';
 };
 const clean = s => String(s||'').replace(/^["']+|["']+$/g,'').trim();
-const isDate = s => /^\d{4}-\d{2}-\d{2}/.test(String(s||'').trim());
-const isTime = s => /^\d{1,2}:\d{2}/.test(String(s||'').trim());
-const isNum  = s => s!==''&&!isNaN(parseFloat(s));
+const val = (obj, key) => (obj[key] !== undefined && obj[key] !== null) ? String(obj[key]).trim() : '';
+const nd = v => (!v||v==='') ? '<span class="na">—</span>' : v;
+const minsToDur = m => {
+  const n = parseInt(m);
+  if(!n||isNaN(n)||n<=0) return '';
+  return Math.floor(n/60)+'h'+(n%60).toString().padStart(2,'0');
+};
 
+// ── CSV split (handles quoted commas) ─────────────────────────────────────────
 function splitLine(line) {
   const res=[];let cur='',inQ=false;
   for(let i=0;i<line.length;i++){
@@ -202,120 +210,137 @@ function splitLine(line) {
   return res;
 }
 
+// ── CSV Parser ────────────────────────────────────────────────────────────────
+// Strategy: read the actual file headers, build a lookup dict per row by header name.
+// Then use header name to get each value — NO hardcoded positional indexes.
+// Old rows (14/16 cols) won't have new columns → those fields will be empty string.
+// New rows (25 cols) will have all fields populated correctly.
 function parseCSV(text) {
-  const lines=text.trim().split('\n').filter(l=>l.trim());
-  if(lines.length<2) return [];
+  const lines = text.trim().split('\n').filter(l => l.trim());
+  if(lines.length < 2) return [];
 
-  // Read actual file headers
-  const fileHdrs=splitLine(lines[0]).map(h=>h.replace(/\r/,'').trim());
-  const hasFlightNums=fileHdrs.includes('out_flight_nums');
+  // Parse header row
+  const hdrs = splitLine(lines[0]).map(h => h.replace(/\r/,'').trim());
 
-  return lines.slice(1).map(line=>{
-    const vals=splitLine(line.replace(/\r/,''));
-    const ncols=vals.length;
+  return lines.slice(1).map(line => {
+    const vals = splitLine(line.replace(/\r/,''));
 
-    let r={};
+    // Build object by header name — this is the key fix
+    // Each value is accessed by name, not position
+    const raw = {};
+    hdrs.forEach((h, i) => { raw[h] = i < vals.length ? vals[i].trim() : ''; });
 
-    if(ncols>=25&&hasFlightNums){
-      // NEW FORMAT (25 cols) — full data
-      // checked_at,season,depart_date,return_date,price_eur,airlines,
-      // out_flight_nums,out_stops,out_dep_time,out_arr_time,out_duration,out_duration_fmt,
-      // out_layover_min,out_layover_fmt,ret_airlines,ret_flight_nums,ret_stops,
-      // ret_dep_time,ret_arr_time,ret_duration,ret_duration_fmt,ret_layover_min,ret_layover_fmt,
-      // airline_count,price_change_pct
-      r.checked_at      = vals[0];
-      r.season          = vals[1];
-      r.depart_date     = vals[2];
-      r.return_date     = vals[3];
-      r.price_eur       = parseFloat(vals[4])||0;
-      r.airlines        = clean(vals[5]);
-      r._fn             = vals[6];   // out_flight_nums
-      r._stops          = vals[7];   // out_stops
-      r._stops_num      = parseInt(vals[7]);
-      r._dep_time       = vals[8];   // out_dep_time
-      r._arr_time       = vals[9];   // out_arr_time
-      r._out_dur_mins   = parseInt(vals[10])||0;
-      r._out_dur        = vals[11]||'—'; // out_duration_fmt
-      r._out_lay_mins   = parseInt(vals[12])||0;
-      r._out_lay        = vals[13]||'—'; // out_layover_fmt
-      r._ret_airlines   = clean(vals[14]);
-      r._ret_fn         = vals[15];  // ret_flight_nums
-      r._ret_stops      = vals[16];
-      r._ret_dep        = vals[17];  // ret_dep_time
-      r._ret_arr        = vals[18];  // ret_arr_time
-      r._ret_dur_mins   = parseInt(vals[19])||0;
-      r._ret_dur        = vals[20]||'—'; // ret_duration_fmt
-      r._ret_lay_mins   = parseInt(vals[21])||0;
-      r._ret_lay        = vals[22]||'—'; // ret_layover_fmt
-      r.airline_count   = parseInt(vals[23])||0;
-      r.price_change_pct= vals[24]!==''?parseFloat(vals[24]):null;
-      r._format         = 'new';
+    const price = parseFloat(raw.price_eur) || 0;
+    if(price <= 0 || !raw.depart_date) return null;
 
-    } else if(ncols>=14&&!hasFlightNums||ncols===14||ncols===16){
-      // OLD FORMAT (14 or 16 cols) — no flight numbers
-      // checked_at,season,depart_date,return_date,price_eur,airlines,
-      // out_stops,out_dep_time,out_arr_time,out_duration,
-      // ret_stops,ret_dep_time,ret_arr_time,ret_duration[,airline_count,price_change_pct]
-      r.checked_at      = vals[0];
-      r.season          = vals[1];
-      r.depart_date     = vals[2];
-      r.return_date     = vals[3];
-      r.price_eur       = parseFloat(vals[4])||0;
-      r.airlines        = clean(vals[5]);
-      r._fn             = '';        // no flight nums in old format
-      r._stops          = vals[6];   // out_stops
-      r._stops_num      = parseInt(vals[6]);
-      r._dep_time       = vals[7];   // out_dep_time
-      r._arr_time       = vals[8];   // out_arr_time
-      const dur         = parseInt(vals[9])||0;
-      r._out_dur_mins   = dur;
-      r._out_dur        = dur?Math.floor(dur/60)+'h'+(dur%60).toString().padStart(2,'0'):'—';
-      r._out_lay        = '—';       // not in old format
-      r._out_lay_mins   = 0;
-      r._ret_stops      = vals[10];
-      r._ret_dep        = vals[11];
-      r._ret_arr        = vals[12];
-      const rdur        = parseInt(vals[13])||0;
-      r._ret_dur_mins   = rdur;
-      r._ret_dur        = rdur?Math.floor(rdur/60)+'h'+(rdur%60).toString().padStart(2,'0'):'—';
-      r._ret_lay        = '—';
-      r.airline_count   = ncols>=16?parseInt(vals[14])||0:0;
-      r.price_change_pct= ncols>=16&&vals[15]!==''?parseFloat(vals[15]):null;
-      r._format         = 'old';
+    // Determine if this row has the new format (has out_flight_nums column)
+    const hasFlightNums = hdrs.includes('out_flight_nums');
 
+    // For old format rows, out_stops is at position 6 (no out_flight_nums column)
+    // For new format rows, out_stops is at position 7 (out_flight_nums is at 6)
+    // Since we use header names, this is handled automatically IF the file header matches
+    // BUT: old rows have 14 cols while file header has 25 cols → old rows read correctly
+    // because hdrs[6]='out_flight_nums' maps to vals[6] which for old rows = the stops value
+    // We need to detect and correct this for old rows
+
+    let out_flight_nums, out_stops, out_dep_time, out_arr_time, out_duration, out_duration_fmt, out_layover_min, out_layover_fmt;
+    let ret_dep_time, ret_arr_time, ret_duration, ret_duration_fmt, ret_layover_min, ret_layover_fmt;
+
+    if(!hasFlightNums || vals.length <= 16) {
+      // OLD FORMAT: checked_at,season,depart_date,return_date,price_eur,airlines,
+      //             out_stops,out_dep_time,out_arr_time,out_duration,
+      //             ret_stops,ret_dep_time,ret_arr_time,ret_duration[,airline_count,price_change_pct]
+      out_flight_nums = '';
+      out_stops       = vals[6] || '';
+      out_dep_time    = vals[7] || '';
+      out_arr_time    = vals[8] || '';
+      out_duration    = vals[9] || '';
+      out_duration_fmt= '';
+      out_layover_min = '';
+      out_layover_fmt = '';
+      ret_dep_time    = vals[11] || '';
+      ret_arr_time    = vals[12] || '';
+      ret_duration    = vals[13] || '';
+      ret_duration_fmt= '';
+      ret_layover_min = '';
+      ret_layover_fmt = '';
     } else {
-      return null; // skip malformed rows
+      // NEW FORMAT: use header names directly
+      out_flight_nums = raw.out_flight_nums || '';
+      out_stops       = raw.out_stops       || '';
+      out_dep_time    = raw.out_dep_time    || '';
+      out_arr_time    = raw.out_arr_time    || '';
+      out_duration    = raw.out_duration    || '';
+      out_duration_fmt= raw.out_duration_fmt|| '';
+      out_layover_min = raw.out_layover_min || '';
+      out_layover_fmt = raw.out_layover_fmt || '';
+      ret_dep_time    = raw.ret_dep_time    || '';
+      ret_arr_time    = raw.ret_arr_time    || '';
+      ret_duration    = raw.ret_duration    || '';
+      ret_duration_fmt= raw.ret_duration_fmt|| '';
+      ret_layover_min = raw.ret_layover_min || '';
+      ret_layover_fmt = raw.ret_layover_fmt || '';
     }
 
-    // Fix out_dur if it's just '—' but we have minutes
-    if(r._out_dur==='—'&&r._out_dur_mins>0)
-      r._out_dur=Math.floor(r._out_dur_mins/60)+'h'+(r._out_dur_mins%60).toString().padStart(2,'0');
-    if(r._ret_dur==='—'&&r._ret_dur_mins>0)
-      r._ret_dur=Math.floor(r._ret_dur_mins/60)+'h'+(r._ret_dur_mins%60).toString().padStart(2,'0');
+    // Build clean display values
+    const durDisplay    = out_duration_fmt || minsToDur(out_duration) || '—';
+    const layDisplay    = out_layover_fmt  || minsToDur(out_layover_min) || '—';
+    const retDurDisplay = ret_duration_fmt || minsToDur(ret_duration) || '—';
+    const retLayDisplay = ret_layover_fmt  || minsToDur(ret_layover_min) || '—';
 
-    return r;
-  }).filter(r=>r&&r.price_eur>0&&r.depart_date);
+    const stopsNum = parseInt(out_stops);
+
+    // price_change_pct — in new format it's the last col; in old 16-col it's vals[15]
+    let pcp = '';
+    if(hasFlightNums && vals.length >= 25) pcp = raw.price_change_pct || '';
+    else if(vals.length >= 16) pcp = vals[15] || '';
+
+    return {
+      checked_at:       raw.checked_at,
+      season:           raw.season,
+      depart_date:      raw.depart_date,
+      return_date:      raw.return_date,
+      price_eur:        price,
+      airlines:         clean(raw.airlines || ''),
+      price_change_pct: pcp !== '' ? parseFloat(pcp) : null,
+      // Computed display fields
+      _fn:              out_flight_nums,
+      _stops:           out_stops,
+      _stops_num:       isNaN(stopsNum) ? null : stopsNum,
+      _dep_time:        out_dep_time,
+      _arr_time:        out_arr_time,
+      out_duration:     parseInt(out_duration) || 0,
+      _dur:             durDisplay,
+      _lay:             layDisplay,
+      _ret_dep:         ret_dep_time,
+      _ret_arr:         ret_arr_time,
+      _ret_dur:         retDurDisplay,
+      _ret_lay:         retLayDisplay,
+      _format:          vals.length >= 25 ? 'new' : 'old',
+    };
+  }).filter(Boolean);
 }
 
-async function loadData(){
+// ── Fetch ─────────────────────────────────────────────────────────────────────
+async function loadData() {
   document.getElementById('loader').style.display='block';
   document.getElementById('errbox').style.display='none';
   document.getElementById('main').style.display='none';
   setBadge('loading','Loading...');
-  try{
-    const resp=await fetch(CSV_URL+'?t='+Date.now());
+  try {
+    const resp = await fetch(CSV_URL+'?t='+Date.now());
     if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const text=await resp.text();
-    const parsed=parseCSV(text);
+    const text = await resp.text();
+    const parsed = parseCSV(text);
     if(!parsed.length) throw new Error('No valid data rows found');
-    allData=parsed;
+    allData = parsed;
     activeTrendDeps.clear(); activeTableDeps.clear();
     document.getElementById('loader').style.display='none';
     document.getElementById('main').style.display='block';
     const weeks=[...new Set(parsed.map(r=>r.checked_at))].sort();
     setBadge('ok','Last run: '+fmtDate(weeks[weeks.length-1]));
     renderAll();
-  }catch(e){
+  } catch(e) {
     document.getElementById('loader').style.display='none';
     document.getElementById('errbox').style.display='block';
     document.getElementById('errmsg').textContent='Error: '+e.message;
@@ -326,6 +351,7 @@ async function loadData(){
 function setBadge(cls,txt){const b=document.getElementById('badge');b.className='badge '+cls;b.textContent=txt;}
 function getFiltered(){return allData.filter(r=>activeSeason==='all'||r.season===activeSeason);}
 
+// ── Stats ─────────────────────────────────────────────────────────────────────
 function renderStats(data){
   const prices=data.map(r=>r.price_eur);
   const min=Math.min(...prices),avg=Math.round(prices.reduce((a,b)=>a+b,0)/prices.length);
@@ -340,13 +366,14 @@ function renderStats(data){
     <div class="stat"><div class="lbl">Airlines seen</div><div class="val">${airs}</div></div>`;
 }
 
+// ── Insights ──────────────────────────────────────────────────────────────────
 function renderInsights(data){
   const byDate={};
   data.forEach(r=>{if(!byDate[r.depart_date])byDate[r.depart_date]=[];byDate[r.depart_date].push({w:r.checked_at,p:r.price_eur});});
   let bestDrop=null,bestPct=0,rDate=null,rPct=0;
   Object.entries(byDate).forEach(([dep,pts])=>{
     const s=pts.sort((a,b)=>a.w.localeCompare(b.w));
-    if(s.length<2) return;
+    if(s.length<2)return;
     const pct=((s[s.length-1].p-s[0].p)/s[0].p)*100;
     if(pct<bestPct){bestPct=pct;bestDrop={dep,pct:pct.toFixed(1)};}
     if(pct>rPct){rPct=pct;rDate={dep,pct:pct.toFixed(1)};}
@@ -365,10 +392,11 @@ function renderInsights(data){
     <div class="ins warn"><div class="it">⚠ Rising price</div><div class="iv">${rDate?fmtDate(rDate.dep)+' (+'+rDate.pct+'%)':'None detected'}</div><div class="is">${rDate?'Watch closely':'No significant rises'}</div></div>`;
 }
 
+// ── Toggle ────────────────────────────────────────────────────────────────────
 function buildToggle(data,cid,activeSet,cb,mode){
   const dates=[...new Set(data.map(r=>r.depart_date))].sort();
   const el=document.getElementById(cid);el.innerHTML='';
-  if(mode==='trend'&&activeSet.size===0) dates.slice(0,4).forEach(d=>activeSet.add(d));
+  if(mode==='trend'&&activeSet.size===0)dates.slice(0,4).forEach(d=>activeSet.add(d));
   dates.forEach(dep=>{
     const s=(data.find(r=>r.depart_date===dep)||{}).season||'August';
     const btn=document.createElement('button');
@@ -379,6 +407,7 @@ function buildToggle(data,cid,activeSet,cb,mode){
   });
 }
 
+// ── Trend chart ───────────────────────────────────────────────────────────────
 function renderTrend(data){
   const weeks=[...new Set(data.map(r=>r.checked_at))].sort();
   let ci=0;
@@ -397,6 +426,7 @@ function renderTrend(data){
               x:{ticks:{font:{size:10},maxRotation:45},grid:{display:false}}}}});
 }
 
+// ── Heatmap ───────────────────────────────────────────────────────────────────
 function renderHeatmap(data){
   const dates=[...new Set(data.map(r=>r.depart_date))].sort();
   const weeks=[...new Set(data.map(r=>r.checked_at))].sort();
@@ -404,11 +434,8 @@ function renderHeatmap(data){
   data.forEach(r=>{const k=r.depart_date+'|'+r.checked_at;if(!grid[k]||r.price_eur<grid[k])grid[k]=r.price_eur;});
   const allP=Object.values(grid).filter(Boolean);
   const gmin=Math.min(...allP),gmax=Math.max(...allP);
-  function pColor(p){
-    const t=(p-gmin)/(gmax-gmin||1);
-    return `rgb(${Math.round(63+t*(239-63))},${Math.round(188-t*(188-68))},${Math.round(118-t*(118-68))})`;
-  }
-  function tColor(p){return(p-gmin)/(gmax-gmin||1)>0.55?'white':'#1a1a2e';}
+  const pColor=p=>{const t=(p-gmin)/(gmax-gmin||1);return `rgb(${Math.round(63+t*(239-63))},${Math.round(188-t*(188-68))},${Math.round(118-t*(118-68))})`; };
+  const tColor=p=>(p-gmin)/(gmax-gmin||1)>0.55?'white':'#1a1a2e';
   let html='<table class="hm"><thead><tr><th>Departure</th>';
   weeks.forEach(w=>html+=`<th>${fmtDate(w)}</th>`);
   html+='</tr></thead><tbody>';
@@ -425,6 +452,7 @@ function renderHeatmap(data){
   document.getElementById('hmWrap').innerHTML=html;
 }
 
+// ── Range chart ───────────────────────────────────────────────────────────────
 function renderRange(data){
   const byDate={};
   data.forEach(r=>{if(!byDate[r.depart_date])byDate[r.depart_date]=[];byDate[r.depart_date].push(r.price_eur);});
@@ -443,6 +471,7 @@ function renderRange(data){
               x:{ticks:{font:{size:9},maxRotation:45,autoSkip:false},grid:{display:false}}}}});
 }
 
+// ── Book chart ────────────────────────────────────────────────────────────────
 function renderBook(data){
   const empty=document.getElementById('bookEmpty');
   const byW={};
@@ -465,6 +494,7 @@ function renderBook(data){
               x:{ticks:{font:{size:10},maxRotation:45},grid:{display:false}}}}});
 }
 
+// ── Airline charts ────────────────────────────────────────────────────────────
 function renderAirlines(data){
   const m={};
   data.forEach(r=>{const a=clean(r.airlines);if(!a)return;if(!m[a])m[a]={p:[],c:0};m[a].p.push(r.price_eur);});
@@ -487,6 +517,7 @@ function renderAirlines(data){
       scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
 }
 
+// ── Table ─────────────────────────────────────────────────────────────────────
 function populateAirlineFilter(data){
   const sel=document.getElementById('fAirline'),cur=sel.value;
   const airlines=[...new Set(data.map(r=>clean(r.airlines)).filter(Boolean))].sort();
@@ -505,37 +536,41 @@ function applyFilters(){
     if(airline&&clean(r.airlines)!==airline)return false;
     if(stops==='0'&&r._stops_num!==0)return false;
     if(stops==='1'&&r._stops_num!==1)return false;
-    if(stops==='2'&&(isNaN(r._stops_num)||r._stops_num<2))return false;
+    if(stops==='2'&&(r._stops_num===null||r._stops_num<2))return false;
     if(fn&&!(r._fn||'').toLowerCase().includes(fn))return false;
     return true;
   });
   f.sort((a,b)=>{
     let va=a[sortCol],vb=b[sortCol];
-    if(['price_eur','_out_dur_mins','_stops_num'].includes(sortCol)){va=parseFloat(va)||0;vb=parseFloat(vb)||0;}
+    if(['price_eur','out_duration'].includes(sortCol)){va=parseFloat(va)||0;vb=parseFloat(vb)||0;}
+    else if(sortCol==='out_stops'){va=a._stops_num??999;vb=b._stops_num??999;}
     return(va<vb?-1:va>vb?1:0)*(sortAsc?1:-1);
   });
   document.getElementById('offerCount').textContent='· '+f.length+' offers shown';
 
-  const stopPill=s=>{
-    const n=parseInt(s);
+  const stopPill=n=>{
     if(n===0)return '<span class="pill p-dir">Direct</span>';
     if(n===1)return '<span class="pill p-s1">1 stop</span>';
-    if(n>=2)return `<span class="pill p-s2">${n} stops</span>`;
+    if(n>=2) return `<span class="pill p-s2">${n} stops</span>`;
     return '<span class="na">—</span>';
   };
   const chg=v=>{
     if(v===null||v===undefined||v===''||isNaN(parseFloat(v)))return '<span class="cfl">—</span>';
     const n=parseFloat(v);
-    return n>5?`<span class="cup">▲${Math.abs(n).toFixed(1)}%</span>`:n<-3?`<span class="cdn">▼${Math.abs(n).toFixed(1)}%</span>`:`<span class="cfl">→${Math.abs(n).toFixed(1)}%</span>`;
+    return n>5?`<span class="cup">▲${Math.abs(n).toFixed(1)}%</span>`:
+           n<-3?`<span class="cdn">▼${Math.abs(n).toFixed(1)}%</span>`:
+           `<span class="cfl">→${Math.abs(n).toFixed(1)}%</span>`;
   };
   const pCls=p=>p<500?'plo':p>900?'phi':'pmd';
   const fnHtml=f=>{
     if(!f||f.trim()==='')return '<span class="na">—</span>';
     return String(f).split(/[,;]\s*/).filter(Boolean).map(n=>`<span class="fn">${n.trim()}</span>`).join('');
   };
-  const nd=v=>(!v||String(v).trim()===''||v==='—')?'<span class="na">—</span>':v;
 
-  if(!f.length){document.getElementById('tableBody').innerHTML='<tr><td colspan="17" class="empty">No offers match your filters</td></tr>';return;}
+  if(!f.length){
+    document.getElementById('tableBody').innerHTML='<tr><td colspan="17" class="empty">No offers match your filters</td></tr>';
+    return;
+  }
   document.getElementById('tableBody').innerHTML=f.slice(0,300).map(r=>`
     <tr>
       <td style="color:#9ca3af;font-size:11px">${fmtDate(r.checked_at)}</td>
@@ -549,12 +584,12 @@ function applyFilters(){
       <td>${stopPill(r._stops_num)}</td>
       <td style="font-weight:500">${fmtTime(r._dep_time)}</td>
       <td style="color:#6b7280">${fmtTime(r._arr_time)}</td>
-      <td>${nd(r._out_dur)}</td>
-      <td style="color:#d97706">${nd(r._out_lay)}</td>
+      <td>${r._dur}</td>
+      <td style="color:#d97706">${r._lay}</td>
       <td style="font-weight:500">${fmtTime(r._ret_dep)}</td>
       <td style="color:#6b7280">${fmtTime(r._ret_arr)}</td>
-      <td>${nd(r._ret_dur)}</td>
-      <td style="color:#d97706">${nd(r._ret_lay)}</td>
+      <td>${r._ret_dur}</td>
+      <td style="color:#d97706">${r._ret_lay}</td>
     </tr>`).join('');
 }
 
