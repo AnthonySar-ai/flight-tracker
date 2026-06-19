@@ -585,11 +585,11 @@ function applyFilters(){
       <td style="font-weight:500">${fmtTime(r._dep_time)}</td>
       <td style="color:#6b7280">${fmtTime(r._arr_time)}</td>
       <td>${r._dur}</td>
-      <td style="color:#d97706">${r._lay}</td>
+      <td style="color:${r._lay==='—'?'#e5e7eb':'#d97706'}">${r._lay}</td>
       <td style="font-weight:500">${fmtTime(r._ret_dep)}</td>
       <td style="color:#6b7280">${fmtTime(r._ret_arr)}</td>
       <td>${r._ret_dur}</td>
-      <td style="color:#d97706">${r._ret_lay}</td>
+      <td style="color:${r._ret_lay==='—'?'#e5e7eb':'#d97706'}">${r._ret_lay}</td>
     </tr>`).join('');
 }
 
