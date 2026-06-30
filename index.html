@@ -3,545 +3,1162 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NCE → BEY Flight Tracker</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<title>Flight Price Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}
-.topbar{background:#1a1a2e;color:white;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
-.topbar h1{font-size:16px;font-weight:600}
-.topbar .sub{font-size:11px;color:#8892b0;margin-top:2px}
-.badge{color:white;font-size:11px;padding:4px 12px;border-radius:20px;font-weight:600}
-.badge.ok{background:#0f6e56}.badge.loading{background:#d97706}.badge.err{background:#dc2626}
-.container{max-width:1300px;margin:0 auto;padding:16px}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
-.stat{background:white;border-radius:10px;padding:12px 15px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
-.stat .lbl{font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
-.stat .val{font-size:22px;font-weight:700;color:#1a1a2e}
-.stat .sub{font-size:10px;color:#d1d5db;margin-top:2px}
-.card{background:white;border-radius:10px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.07);margin-bottom:14px}
-.ctitle{font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:6px}
-.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.trow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
-.tbtn{padding:4px 11px;border-radius:14px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid #e5e7eb;background:white;color:#6b7280;transition:all .12s}
-.tbtn.s-all.on{background:#6b7280;color:white;border-color:#6b7280}
-.tbtn.s-aug{border-color:#0f6e56;color:#0f6e56}.tbtn.s-aug.on{background:#0f6e56;color:white}
-.tbtn.s-dec{border-color:#1e5ba8;color:#1e5ba8}.tbtn.s-dec.on{background:#1e5ba8;color:white}
-.tbtn.d-aug{border-color:#0f6e56;color:#0f6e56;font-size:11px}.tbtn.d-aug.on{background:#e6f7f2;font-weight:700}
-.tbtn.d-dec{border-color:#1e5ba8;color:#1e5ba8;font-size:11px}.tbtn.d-dec.on{background:#e8f0fb;font-weight:700}
-.fbar{display:flex;flex-wrap:wrap;gap:7px;align-items:center;padding:8px 0 10px;border-bottom:1px solid #f3f4f6;margin-bottom:8px}
-.fbar select,.fbar input{font-size:12px;padding:4px 9px;border:1.5px solid #e5e7eb;border-radius:7px;background:white;color:#374151;outline:none}
-.fbar label{font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
-.sbtn{font-size:11px;padding:4px 9px;border-radius:7px;border:1.5px solid #e5e7eb;background:white;color:#374151;cursor:pointer}
-.sbtn.on{border-color:#0f6e56;color:#0f6e56;background:#f0fdf9}
-.clrbtn{font-size:11px;padding:4px 9px;border-radius:7px;border:1.5px solid #fca5a5;background:#fff5f5;color:#dc2626;cursor:pointer}
-.rfbtn{font-size:11px;padding:4px 11px;border-radius:7px;border:1.5px solid #0f6e56;background:#f0fdf9;color:#0f6e56;cursor:pointer;font-weight:600}
-.tbl-wrap{overflow-x:auto;max-height:480px;overflow-y:auto}
-table{width:100%;border-collapse:collapse;font-size:12px;min-width:980px}
-thead{position:sticky;top:0;z-index:2;background:white}
-thead tr{border-bottom:2px solid #f3f4f6}
-th{padding:7px 9px;text-align:left;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;cursor:pointer}
-th:hover{color:#374151}
-td{padding:7px 9px;border-bottom:1px solid #f9fafb;white-space:nowrap}
-tr:hover td{background:#fafafa}
-.pill{display:inline-block;padding:2px 7px;border-radius:7px;font-size:10px;font-weight:600}
-.p-aug{background:#e6f7f2;color:#0f6e56}.p-dec{background:#e8f0fb;color:#1e5ba8}
-.p-dir{background:#dcfce7;color:#16a34a}.p-s1{background:#fef3c7;color:#d97706}.p-s2{background:#fee2e2;color:#dc2626}
-.cup{color:#dc2626;font-weight:600}.cdn{color:#16a34a;font-weight:600}.cfl{color:#d1d5db}
-.plo{color:#0f6e56;font-weight:700}.phi{color:#dc2626;font-weight:700}.pmd{font-weight:600}
-.fn{font-family:monospace;font-size:10px;color:#6b7280;background:#f3f4f6;padding:1px 5px;border-radius:4px;margin:1px;display:inline-block}
-.ins{background:white;border-radius:10px;padding:13px 15px;box-shadow:0 1px 3px rgba(0,0,0,.07);border-left:4px solid #0f6e56}
-.ins.warn{border-left-color:#d97706}.ins.info{border-left-color:#1e5ba8}
-.ins .it{font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
-.ins .iv{font-size:13px;font-weight:700;color:#1a1a2e}.ins .is{font-size:10px;color:#9ca3af;margin-top:2px}
-.empty{text-align:center;padding:28px;color:#9ca3af;font-size:13px}
-.loader{text-align:center;padding:50px}
-.spinner{width:36px;height:36px;border:3px solid #f3f4f6;border-top-color:#0f6e56;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
-@keyframes spin{to{transform:rotate(360deg)}}
-.hm-wrap{overflow-x:auto}
-.hm{border-collapse:collapse;font-size:11px;width:100%}
-.hm th{padding:6px 10px;font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;border:1px solid #f3f4f6;background:white;white-space:nowrap}
-.hm td{padding:6px 10px;border:1px solid #f3f4f6;text-align:center;font-weight:600;font-size:11px;min-width:72px}
-.hm .rl{text-align:left;background:#fafafa;white-space:nowrap;font-weight:600;color:#374151}
-canvas{max-height:280px}
-@media(max-width:640px){.grid2{grid-template-columns:1fr}}
+  :root {
+    --navy: #0f1f3d;
+    --navy-light: #1a2f55;
+    --green: #0f6e56;
+    --green-light: #e6f4f0;
+    --blue: #1e5ba8;
+    --blue-light: #e8f0fb;
+    --bg: #f0f2f5;
+    --card: #ffffff;
+    --text: #1a1a2e;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --red: #dc2626;
+    --amber: #d97706;
+    --price-low: #0f6e56;
+    --price-high: #dc2626;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+  /* TOPBAR */
+  #topbar {
+    background: var(--navy);
+    color: white;
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  #topbar h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; flex: 1; }
+  #topbar h1 span { color: #4ade80; }
+  #last-run {
+    background: rgba(255,255,255,0.12);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.75);
+  }
+  #refresh-btn {
+    background: var(--green);
+    color: white;
+    border: none;
+    padding: 7px 14px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s;
+  }
+  #refresh-btn:hover { background: #0a5a45; }
+
+  /* LAYOUT */
+  .main { max-width: 1400px; margin: 0 auto; padding: 20px 20px 40px; }
+
+  /* SPINNER */
+  #spinner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 300px;
+    gap: 16px;
+  }
+  .spin {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #spinner p { color: var(--muted); font-size: 14px; }
+
+  /* ERROR */
+  #error-box {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 10px;
+    padding: 20px;
+    color: #991b1b;
+    margin: 20px 0;
+    display: none;
+  }
+
+  /* STATS BAR */
+  #stats-bar {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+  }
+  .stat-card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .stat-card .value { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.1; }
+  .stat-card .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* INSIGHT CARDS */
+  #insights {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .insight {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--green);
+  }
+  .insight.warn { border-left-color: var(--amber); }
+  .insight.good { border-left-color: var(--green); }
+  .insight.info { border-left-color: var(--blue); }
+  .insight .i-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .insight .i-value { font-size: 15px; font-weight: 700; }
+  .insight .i-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+  /* SEASON TABS */
+  #season-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .stab {
+    padding: 7px 18px;
+    border-radius: 20px;
+    border: 2px solid var(--border);
+    background: white;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+  .stab.active { border-color: var(--green); color: var(--green); background: var(--green-light); }
+  .stab.decjan { }
+  .stab.decjan.active { border-color: var(--blue); color: var(--blue); background: var(--blue-light); }
+
+  /* CARD */
+  .card {
+    background: var(--card);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card h2 .badge {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted);
+    background: var(--bg);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  /* CHARTS GRID */
+  .charts-row {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .charts-2 { grid-template-columns: 1fr 1fr; }
+  .charts-1 { grid-template-columns: 1fr; }
+
+  /* DATE TOGGLES */
+  .toggle-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .dtog {
+    padding: 4px 12px;
+    border-radius: 6px;
+    border: 1.5px solid var(--border);
+    background: white;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    transition: all 0.12s;
+  }
+  .dtog.active { border-color: var(--green); color: white; background: var(--green); }
+  .dtog.active.decjan { border-color: var(--blue); background: var(--blue); }
+
+  /* HEATMAP */
+  #heatmap-wrap { overflow-x: auto; }
+  #heatmap-table {
+    border-collapse: collapse;
+    font-size: 11px;
+    min-width: 100%;
+  }
+  #heatmap-table th {
+    padding: 4px 8px;
+    text-align: center;
+    color: var(--muted);
+    font-weight: 600;
+    white-space: nowrap;
+    background: white;
+    position: sticky;
+    top: 0;
+  }
+  #heatmap-table td {
+    padding: 6px 10px;
+    text-align: center;
+    border: 1px solid #f3f4f6;
+    font-weight: 700;
+    border-radius: 4px;
+  }
+  #heatmap-table .row-label {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    padding-right: 14px;
+    font-size: 12px;
+  }
+
+  /* TABLE */
+  #table-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+    align-items: center;
+  }
+  .filter-select, .filter-input {
+    padding: 6px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 7px;
+    font-size: 13px;
+    color: var(--text);
+    background: white;
+    outline: none;
+    transition: border-color 0.12s;
+  }
+  .filter-select:focus, .filter-input:focus { border-color: var(--green); }
+  .sort-btn {
+    padding: 6px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 7px;
+    background: white;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    transition: all 0.12s;
+  }
+  .sort-btn.active { border-color: var(--green); color: var(--green); background: var(--green-light); }
+  .clear-btn {
+    padding: 6px 12px;
+    border-radius: 7px;
+    border: 1.5px solid var(--border);
+    background: white;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .clear-btn:hover { border-color: var(--red); color: var(--red); }
+
+  #offers-table-wrap { overflow-x: auto; }
+  #offers-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  #offers-table thead th {
+    padding: 8px 10px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+    background: white;
+    position: sticky;
+    top: 0;
+  }
+  #offers-table tbody tr:hover { background: #fafafa; }
+  #offers-table tbody td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  /* PILLS */
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .pill-aug { background: #fef3c7; color: #92400e; }
+  .pill-dec { background: var(--blue-light); color: var(--blue); }
+  .pill-direct { background: #dcfce7; color: #166534; }
+  .pill-1stop { background: #fef3c7; color: #92400e; }
+  .pill-2stop { background: #fee2e2; color: #991b1b; }
+
+  .price-low-text { color: var(--price-low); font-weight: 700; }
+  .price-high-text { color: var(--price-high); font-weight: 700; }
+  .price-normal { font-weight: 600; }
+
+  .chg-up { color: var(--red); font-weight: 700; }
+  .chg-dn { color: var(--green); font-weight: 700; }
+  .chg-neu { color: var(--muted); }
+
+  .flight-chip {
+    display: inline-block;
+    background: #f3f4f6;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    margin: 1px 2px;
+    color: var(--navy);
+  }
+
+  #table-count {
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+
+  /* CANVAS */
+  .chart-container { position: relative; width: 100%; }
+
+  /* AIRLINES CHARTS */
+  .airlines-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 900px) {
+    #stats-bar { grid-template-columns: repeat(3, 1fr); }
+    #insights { grid-template-columns: 1fr; }
+    .charts-2, .airlines-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    #stats-bar { grid-template-columns: repeat(2, 1fr); }
+    .main { padding: 12px 12px 32px; }
+  }
 </style>
 </head>
 <body>
-<div class="topbar">
-  <div><h1>✈ NCE → BEY Flight Price Tracker</h1><div class="sub">Nice Côte d'Azur → Beirut · Roundtrip · Auto-updated Mon &amp; Thu</div></div>
-  <div style="display:flex;align-items:center;gap:7px">
-    <button class="rfbtn" onclick="loadData()">↻ Refresh</button>
-    <div class="badge loading" id="badge">Loading...</div>
-  </div>
+
+<div id="topbar">
+  <h1>✈ Flight <span>Tracker</span></h1>
+  <div id="last-run">Loading…</div>
+  <button id="refresh-btn" onclick="loadData()">↻ Refresh</button>
 </div>
-<div class="container">
-  <div id="loader" class="loader"><div class="spinner"></div><p style="color:#9ca3af;font-size:13px">Fetching latest data...</p></div>
-  <div id="errbox" style="display:none;text-align:center;padding:40px">
-    <p id="errmsg" style="color:#6b7280;font-size:13px;margin-bottom:10px"></p>
-    <a href="#" onclick="loadData()" style="color:#0f6e56;font-size:12px">Try again</a>
-  </div>
-  <div id="main" style="display:none">
-    <div class="stats" id="statsRow"></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:14px" id="insightRow"></div>
-    <div class="trow" id="seasonTabs">
-      <button class="tbtn s-all on" onclick="setSeason('all',this)">All seasons</button>
-      <button class="tbtn s-aug" onclick="setSeason('August',this)">☀ August</button>
-      <button class="tbtn s-dec" onclick="setSeason('DecJan',this)">🎄 Dec / Jan</button>
-    </div>
-    <div class="card">
-      <div class="ctitle"><span class="dot" style="background:#0f6e56"></span>Price trend over time — cheapest per week per departure date</div>
-      <div class="trow" id="depToggle"></div>
-      <canvas id="trendChart"></canvas>
-    </div>
-    <div class="grid2" style="margin-bottom:14px">
-      <div class="card">
-        <div class="ctitle"><span class="dot" style="background:#dc2626"></span>Price heatmap — cheapest per departure per week · green=cheap · red=expensive</div>
-        <div class="hm-wrap"><div id="hmWrap"><div class="empty">Loading...</div></div></div>
-      </div>
-      <div class="card">
-        <div class="ctitle"><span class="dot" style="background:#7c3aed"></span>Price range per departure — min / avg / max</div>
-        <canvas id="rangeChart"></canvas>
-      </div>
-    </div>
-    <div class="grid2" style="margin-bottom:14px">
-      <div class="card">
-        <div class="ctitle"><span class="dot" style="background:#d97706"></span>Best time to book — avg price by weeks before departure</div>
-        <canvas id="bookChart"></canvas>
-        <div id="bookEmpty" style="display:none;text-align:center;padding:14px;font-size:11px;color:#9ca3af">Needs more weeks of data</div>
-      </div>
-      <div class="card">
-        <div class="ctitle"><span class="dot" style="background:#0891b2"></span>Airlines — avg price &amp; times cheapest</div>
-        <div class="grid2"><canvas id="airAvgChart"></canvas><canvas id="airCheapChart"></canvas></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="ctitle"><span class="dot" style="background:#d97706"></span>All collected offers <span id="offerCount" style="font-size:11px;color:#d1d5db;font-weight:400;text-transform:none;letter-spacing:0"></span></div>
-      <div class="fbar"><label>Dates</label><div class="trow" id="tableDepToggle" style="margin-bottom:0;gap:5px"></div></div>
-      <div class="fbar">
-        <label>Filter</label>
-        <select id="fAirline" onchange="applyFilters()"><option value="">All airlines</option></select>
-        <select id="fStops" onchange="applyFilters()">
-          <option value="">Any stops</option><option value="0">Direct only</option>
-          <option value="1">1 stop</option><option value="2">2+ stops</option>
-        </select>
-        <input id="fFlight" placeholder="Flight no. e.g. TK826" oninput="applyFilters()" style="width:150px">
-        <label style="margin-left:4px">Sort</label>
-        <button class="sbtn on" onclick="setSort('price_eur',this)">Price ↕</button>
-        <button class="sbtn" onclick="setSort('depart_date',this)">Dep date ↕</button>
-        <button class="sbtn" onclick="setSort('checked_at',this)">Week ↕</button>
-        <button class="sbtn" onclick="setSort('_dur_mins',this)">Duration ↕</button>
-        <button class="clrbtn" onclick="clearFilters()">✕ Clear</button>
-      </div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr>
-            <th onclick="setSort('checked_at',null)">Week ↕</th>
-            <th>Season</th>
-            <th onclick="setSort('depart_date',null)">Depart ↕</th>
-            <th>Return</th>
-            <th onclick="setSort('price_eur',null)">Price € ↕</th>
-            <th>Chg</th>
-            <th>Airline(s)</th>
-            <th>Flight nos.</th>
-            <th onclick="setSort('_stops_num',null)">Stops ↕</th>
-            <th>Dep time</th>
-            <th>Arr time</th>
-            <th onclick="setSort('_dur_mins',null)">Duration ↕</th>
-            <th>Layover</th>
-          </tr></thead>
-          <tbody id="tableBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+
+<div class="main">
+  <div id="spinner"><div class="spin"></div><p>Fetching latest prices…</p></div>
+  <div id="error-box"></div>
+  <div id="dashboard" style="display:none"></div>
 </div>
+
 <script>
-const GITHUB_USER = location.hostname.split('.')[0];
-const CSV_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/flight-tracker/main/data/flights.csv`;
+const CSV_URL = 'https://raw.githubusercontent.com/AnthonySar-ai/flight-tracker/main/data/flights.csv';
 
-let allData=[], activeSeason='all';
-let activeTrendDeps=new Set(), activeTableDeps=new Set();
-let sortCol='price_eur', sortAsc=true;
-let trendChart, rangeChart, bookChart, airAvgChart, airCheapChart;
-const C=['#0f6e56','#1e5ba8','#7c3aed','#d97706','#dc2626','#0891b2','#16a34a','#9333ea','#c2410c','#db2777'];
+// ── helpers ──────────────────────────────────────────────────────────────────
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const fmtDate = d => {
-  if(!d||!d.trim()) return '—';
-  const p = d.trim().split(' ')[0].split('-');
-  return p.length===3 ? `${p[2]}-${p[1]}-${p[0]}` : d;
-};
-const fmtTime = dt => {
-  if(!dt||!dt.trim()) return '—';
-  const parts = dt.trim().split(' ');
-  if(parts.length >= 2 && parts[1].includes(':')) return parts[1];
-  if(parts[0].includes(':')) return parts[0];
-  return '—';
-};
-const clean = s => String(s||'').replace(/^["']+|["']+$/g,'').trim();
-const minsToDur = m => { const n=parseInt(m); if(!n||isNaN(n)||n<=0) return '—'; return Math.floor(n/60)+'h'+(n%60).toString().padStart(2,'0'); };
-
-// ── CSV split ─────────────────────────────────────────────────────────────────
-function splitLine(line) {
-  const res=[];let cur='',inQ=false;
-  for(let i=0;i<line.length;i++){
-    const c=line[i];
-    if(c==='"') inQ=!inQ;
-    else if(c===','&&!inQ){res.push(cur);cur='';}
-    else cur+=c;
-  }
-  res.push(cur);
-  return res;
+function fmtDate(str) {
+  if (!str) return '—';
+  const d = str.split(' ')[0]; // strip time if present
+  const [y, m, day] = d.split('-');
+  if (!y || !m || !day) return str;
+  return `${day}-${m}-${y}`;
 }
 
-// ── THE KEY FIX: parse by column COUNT per row, ignore file headers ───────────
-// Confirmed positions:
-// OLD (14 or 16 cols): [0]checked_at [1]season [2]depart_date [3]return_date
-//   [4]price_eur [5]airlines [6]out_stops [7]out_dep_time [8]out_arr_time
-//   [9]out_duration [10]ret_stops [11]ret_dep_time [12]ret_arr_time [13]ret_duration
-//   [14]airline_count (16-col only) [15]price_change_pct (16-col only)
-//
-// NEW (25 cols): [0]checked_at [1]season [2]depart_date [3]return_date
-//   [4]price_eur [5]airlines [6]out_flight_nums [7]out_stops [8]out_dep_time
-//   [9]out_arr_time [10]out_duration [11]out_duration_fmt [12]out_layover_min
-//   [13]out_layover_fmt [14]ret_airlines [15]ret_flight_nums [16]ret_stops
-//   [17]ret_dep_time [18]ret_arr_time [19]ret_duration [20]ret_duration_fmt
-//   [21]ret_layover_min [22]ret_layover_fmt [23]airline_count [24]price_change_pct
+function fmtTime(str) {
+  if (!str) return '—';
+  const parts = str.trim().split(' ');
+  const t = parts.length > 1 ? parts[1] : parts[0];
+  return t.substring(0, 5);
+}
 
-function parseRow(v) {
-  const n = v.length;
-  const price = parseFloat(v[4]);
-  if(!price || price <= 0) return null;
-  if(!v[2] || !v[2].trim()) return null;
+function fmtMins(mins) {
+  if (!mins || isNaN(mins)) return '—';
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return `${h}h${String(m).padStart(2,'0')}`;
+}
 
-  let r = {
-    checked_at:  v[0].trim(),
-    season:      v[1].trim(),
-    depart_date: v[2].trim(),
-    return_date: v[3].trim(),
-    price_eur:   price,
-    airlines:    clean(v[5]),
-    price_change_pct: null,
-  };
-
-  if(n >= 20) {
-    // NEW FORMAT (25 cols)
-    r._fn        = v[6].trim();
-    r._stops_num = parseInt(v[7]);
-    r._dep_time  = v[8].trim();
-    r._arr_time  = v[9].trim();
-    r._dur_mins  = parseInt(v[10]) || 0;
-    r._dur       = v[11].trim() || minsToDur(v[10]);
-    r._lay       = v[13].trim() || (v[12].trim() ? minsToDur(v[12]) : '—');
-    r.price_change_pct = v[24] && v[24].trim() !== '' ? parseFloat(v[24]) : null;
+function parseRow(cells) {
+  const n = cells.length;
+  if (n >= 20) {
+    // new format (25 cols)
+    return {
+      checked_at: cells[0], season: cells[1],
+      depart_date: cells[2], return_date: cells[3],
+      price_eur: parseFloat(cells[4]) || 0,
+      airlines: cells[5], out_flight_nums: cells[6],
+      out_stops: parseInt(cells[7]) || 0,
+      out_dep_time: cells[8], out_arr_time: cells[9],
+      out_duration: parseInt(cells[10]) || 0,
+      out_duration_fmt: cells[11],
+      out_layover_min: parseInt(cells[12]) || 0,
+      out_layover_fmt: cells[13],
+      ret_airlines: cells[14], ret_flight_nums: cells[15],
+      ret_stops: parseInt(cells[16]) || 0,
+      ret_dep_time: cells[17], ret_arr_time: cells[18],
+      ret_duration: parseInt(cells[19]) || 0,
+      ret_duration_fmt: cells[20],
+      ret_layover_min: parseInt(cells[21]) || 0,
+      ret_layover_fmt: cells[22],
+      airline_count: parseInt(cells[23]) || 1,
+      price_change_pct: parseFloat(cells[24]) || null,
+      format: 'new'
+    };
   } else {
-    // OLD FORMAT (14 or 16 cols)
-    r._fn        = '';
-    r._stops_num = parseInt(v[6]);
-    r._dep_time  = v[7].trim();
-    r._arr_time  = v[8].trim();
-    r._dur_mins  = parseInt(v[9]) || 0;
-    r._dur       = minsToDur(v[9]);
-    r._lay       = '—';
-    r.price_change_pct = (n >= 16 && v[15] && v[15].trim() !== '') ? parseFloat(v[15]) : null;
+    // old format (14 or 16 cols)
+    return {
+      checked_at: cells[0], season: cells[1],
+      depart_date: cells[2], return_date: cells[3],
+      price_eur: parseFloat(cells[4]) || 0,
+      airlines: cells[5],
+      out_flight_nums: '',
+      out_stops: parseInt(cells[6]) || 0,
+      out_dep_time: cells[7], out_arr_time: cells[8],
+      out_duration: parseInt(cells[9]) || 0,
+      out_duration_fmt: '',
+      out_layover_min: 0, out_layover_fmt: '',
+      ret_stops: parseInt(cells[10]) || 0,
+      ret_dep_time: cells[11], ret_arr_time: cells[12],
+      ret_duration: parseInt(cells[13]) || 0,
+      ret_duration_fmt: '', ret_layover_min: 0, ret_layover_fmt: '',
+      airline_count: n >= 15 ? (parseInt(cells[14]) || 1) : 1,
+      price_change_pct: n >= 16 ? (parseFloat(cells[15]) || null) : null,
+      format: 'old'
+    };
   }
-
-  // Stops pill
-  r._stops_num = isNaN(r._stops_num) ? null : r._stops_num;
-  return r;
 }
 
 function parseCSV(text) {
-  const lines = text.trim().split('\n').filter(l => l.trim());
-  if(lines.length < 2) return [];
-  // Skip header line (line 0), parse from line 1
-  const results = [];
-  for(let i = 1; i < lines.length; i++) {
-    const v = splitLine(lines[i].replace(/\r/,''));
-    const r = parseRow(v);
-    if(r) results.push(r);
+  const lines = text.trim().split('\n');
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const cells = splitCSVLine(line);
+    if (cells.length < 5) continue;
+    try { rows.push(parseRow(cells)); } catch(e) {}
   }
-  return results;
+  return rows;
 }
 
-// ── Fetch ─────────────────────────────────────────────────────────────────────
+function splitCSVLine(line) {
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQ = !inQ; }
+    else if (c === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
+    else { cur += c; }
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+// ── colour helpers ────────────────────────────────────────────────────────────
+
+function heatColor(val, min, max) {
+  if (val == null) return '#f9fafb';
+  const t = max === min ? 0.5 : (val - min) / (max - min);
+  // green → yellow → red
+  const r = Math.round(t < 0.5 ? 2 * t * 255 : 255);
+  const g = Math.round(t < 0.5 ? 200 : (1 - t) * 2 * 200);
+  const b = 80;
+  return `rgba(${r},${g},${b},0.25)`;
+}
+
+// ── main render ───────────────────────────────────────────────────────────────
+
+let allRows = [], activeSeason = 'all', activeTableDates = new Set();
+let tableSort = 'price', tableAirline = '', tableStops = 'any', tableFlightSearch = '';
+let charts = {};
+
+function destroyCharts() {
+  Object.values(charts).forEach(c => { try { c.destroy(); } catch(e) {} });
+  charts = {};
+}
+
 async function loadData() {
-  document.getElementById('loader').style.display='block';
-  document.getElementById('errbox').style.display='none';
-  document.getElementById('main').style.display='none';
-  setBadge('loading','Loading...');
+  document.getElementById('spinner').style.display = 'flex';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('error-box').style.display = 'none';
+  destroyCharts();
+
   try {
-    const resp = await fetch(CSV_URL + '?t=' + Date.now());
-    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const text = await resp.text();
-    const parsed = parseCSV(text);
-    if(!parsed.length) throw new Error('No valid data rows found');
-    allData = parsed;
-    activeTrendDeps.clear(); activeTableDeps.clear();
-    document.getElementById('loader').style.display='none';
-    document.getElementById('main').style.display='block';
-    const weeks = [...new Set(parsed.map(r=>r.checked_at))].sort();
-    setBadge('ok', 'Last run: ' + fmtDate(weeks[weeks.length-1]));
-    renderAll();
+    const res = await fetch(CSV_URL + '?t=' + Date.now());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    allRows = parseCSV(text);
+    if (!allRows.length) throw new Error('No data rows found');
+
+    const lastDate = allRows.map(r => r.checked_at).sort().pop();
+    document.getElementById('last-run').textContent = '↺ Last run: ' + fmtDate(lastDate);
+
+    render();
+    document.getElementById('spinner').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
   } catch(e) {
-    document.getElementById('loader').style.display='none';
-    document.getElementById('errbox').style.display='block';
-    document.getElementById('errmsg').textContent = 'Error: ' + e.message;
-    setBadge('err','Failed to load');
-    console.error(e);
+    document.getElementById('spinner').style.display = 'none';
+    const eb = document.getElementById('error-box');
+    eb.style.display = 'block';
+    eb.innerHTML = `<strong>Could not load data.</strong> ${e.message}<br><small>Check the CSV URL or network settings.</small>`;
   }
 }
-function setBadge(cls,txt){const b=document.getElementById('badge');b.className='badge '+cls;b.textContent=txt;}
-function getFiltered(){return allData.filter(r=>activeSeason==='all'||r.season===activeSeason);}
 
-function renderStats(data){
-  const prices=data.map(r=>r.price_eur);
-  const min=Math.min(...prices), avg=Math.round(prices.reduce((a,b)=>a+b,0)/prices.length);
-  const weeks=[...new Set(data.map(r=>r.checked_at))].length;
-  const airs=[...new Set(data.map(r=>r.airlines).filter(Boolean))].length;
-  const minR=data.find(r=>r.price_eur===min);
-  document.getElementById('statsRow').innerHTML=`
-    <div class="stat"><div class="lbl">Cheapest ever</div><div class="val" style="color:#0f6e56">€${min}</div><div class="sub">${minR?minR.airlines:''}</div></div>
-    <div class="stat"><div class="lbl">Average price</div><div class="val">€${avg}</div></div>
-    <div class="stat"><div class="lbl">Weeks tracked</div><div class="val">${weeks}</div></div>
-    <div class="stat"><div class="lbl">Total offers</div><div class="val">${data.length}</div></div>
-    <div class="stat"><div class="lbl">Airlines seen</div><div class="val">${airs}</div></div>`;
-}
-
-function renderInsights(data){
-  const byDate={};
-  data.forEach(r=>{if(!byDate[r.depart_date])byDate[r.depart_date]=[];byDate[r.depart_date].push({w:r.checked_at,p:r.price_eur});});
-  let bestDrop=null,bestPct=0,rDate=null,rPct=0;
-  Object.entries(byDate).forEach(([dep,pts])=>{
-    const s=pts.sort((a,b)=>a.w.localeCompare(b.w));
-    if(s.length<2) return;
-    const pct=((s[s.length-1].p-s[0].p)/s[0].p)*100;
-    if(pct<bestPct){bestPct=pct;bestDrop={dep,pct:pct.toFixed(1)};}
-    if(pct>rPct){rPct=pct;rDate={dep,pct:pct.toFixed(1)};}
-  });
-  const ws=[...new Set(data.map(r=>r.checked_at))].sort();
-  let trend='Need at least 2 weeks of data';
-  if(ws.length>=2){
-    const last=ws[ws.length-1],prev=ws[ws.length-2];
-    const ld=data.filter(r=>r.checked_at===last),pd=data.filter(r=>r.checked_at===prev);
-    const diff=(ld.reduce((a,b)=>a+b.price_eur,0)/ld.length)-(pd.reduce((a,b)=>a+b.price_eur,0)/pd.length);
-    trend=diff>20?'📈 Prices rising — consider booking soon':diff<-20?'📉 Prices dropping — worth waiting':'➡ Prices stable this week';
-  }
-  document.getElementById('insightRow').innerHTML=`
-    <div class="ins info"><div class="it">Current trend</div><div class="iv">${trend}</div><div class="is">Based on last 2 runs</div></div>
-    <div class="ins"><div class="it">💚 Best drop</div><div class="iv">${bestDrop?fmtDate(bestDrop.dep)+' ('+bestDrop.pct+'%)':'Need more weeks'}</div><div class="is">Biggest fall since tracking started</div></div>
-    <div class="ins warn"><div class="it">⚠ Rising price</div><div class="iv">${rDate?fmtDate(rDate.dep)+' (+'+rDate.pct+'%)':'None detected'}</div><div class="is">${rDate?'Watch closely':'No significant rises'}</div></div>`;
-}
-
-function buildToggle(data,cid,activeSet,cb,mode){
-  const dates=[...new Set(data.map(r=>r.depart_date))].sort();
-  const el=document.getElementById(cid);el.innerHTML='';
-  if(mode==='trend'&&activeSet.size===0) dates.slice(0,4).forEach(d=>activeSet.add(d));
-  dates.forEach(dep=>{
-    const s=(data.find(r=>r.depart_date===dep)||{}).season||'August';
-    const btn=document.createElement('button');
-    btn.className=`tbtn ${s==='August'?'d-aug':'d-dec'}${activeSet.has(dep)?' on':''}`;
-    btn.textContent=fmtDate(dep);
-    btn.onclick=()=>{activeSet.has(dep)?activeSet.delete(dep):activeSet.add(dep);btn.classList.toggle('on');cb();};
-    el.appendChild(btn);
-  });
-}
-
-function renderTrend(data){
-  const weeks=[...new Set(data.map(r=>r.checked_at))].sort();
-  let ci=0;
-  const datasets=[...activeTrendDeps].sort().map(dep=>{
-    const dd=data.filter(r=>r.depart_date===dep);if(!dd.length)return null;
-    const color=dd[0].season==='August'?C[ci%4]:C[4+ci%4];ci++;
-    return{label:fmtDate(dep)+(dd[0].season==='August'?' ☀':' 🎄'),
-      data:weeks.map(w=>{const wd=dd.filter(r=>r.checked_at===w);return wd.length?Math.min(...wd.map(r=>r.price_eur)):null;}),
-      borderColor:color,backgroundColor:color+'12',tension:0.35,pointRadius:5,pointHoverRadius:7,borderWidth:2.5,spanGaps:true};
-  }).filter(Boolean);
-  if(trendChart)trendChart.destroy();
-  trendChart=new Chart(document.getElementById('trendChart'),{type:'line',data:{labels:weeks.map(fmtDate),datasets},
-    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8}},
-      tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': €'+(ctx.parsed.y||0).toFixed(0),title:ctx=>'Week: '+ctx[0].label}}},
-      scales:{y:{ticks:{callback:v=>'€'+v,font:{size:11}},grid:{color:'rgba(0,0,0,0.05)'}},
-              x:{ticks:{font:{size:10},maxRotation:45},grid:{display:false}}}}});
-}
-
-function renderHeatmap(data){
-  const dates=[...new Set(data.map(r=>r.depart_date))].sort();
-  const weeks=[...new Set(data.map(r=>r.checked_at))].sort();
-  const grid={};
-  data.forEach(r=>{const k=r.depart_date+'|'+r.checked_at;if(!grid[k]||r.price_eur<grid[k])grid[k]=r.price_eur;});
-  const allP=Object.values(grid).filter(Boolean);
-  const gmin=Math.min(...allP),gmax=Math.max(...allP);
-  const pColor=p=>{const t=(p-gmin)/(gmax-gmin||1);return `rgb(${Math.round(63+t*(239-63))},${Math.round(188-t*(188-68))},${Math.round(118-t*(118-68))})`};
-  const tColor=p=>(p-gmin)/(gmax-gmin||1)>0.55?'white':'#1a1a2e';
-  let html='<table class="hm"><thead><tr><th>Departure</th>';
-  weeks.forEach(w=>html+=`<th>${fmtDate(w)}</th>`);
-  html+='</tr></thead><tbody>';
-  dates.forEach(dep=>{
-    const s=(data.find(r=>r.depart_date===dep)||{}).season||'August';
-    html+=`<tr><td class="rl">${s==='August'?'☀ ':'🎄 '}${fmtDate(dep)}</td>`;
-    weeks.forEach(w=>{const p=grid[dep+'|'+w];
-      html+=p?`<td style="background:${pColor(p)};color:${tColor(p)}" title="€${p}">€${p}</td>`:'<td style="color:#e5e7eb">—</td>';
-    });
-    html+='</tr>';
-  });
-  document.getElementById('hmWrap').innerHTML=html+'</tbody></table>';
-}
-
-function renderRange(data){
-  const byDate={};
-  data.forEach(r=>{if(!byDate[r.depart_date])byDate[r.depart_date]=[];byDate[r.depart_date].push(r.price_eur);});
-  const dates=Object.keys(byDate).sort();
-  const colors=dates.map(d=>(data.find(r=>r.depart_date===d)||{}).season==='August'?'#0f6e56':'#1e5ba8');
-  if(rangeChart)rangeChart.destroy();
-  rangeChart=new Chart(document.getElementById('rangeChart'),{type:'bar',
-    data:{labels:dates.map(fmtDate),datasets:[
-      {label:'Min',data:dates.map(d=>Math.min(...byDate[d])),backgroundColor:colors.map(c=>c+'55'),borderRadius:3},
-      {label:'Avg',data:dates.map(d=>Math.round(byDate[d].reduce((a,b)=>a+b,0)/byDate[d].length)),backgroundColor:colors.map(c=>c+'99'),borderRadius:3},
-      {label:'Max',data:dates.map(d=>Math.max(...byDate[d])),backgroundColor:colors.map(c=>c+'cc'),borderRadius:3},
-    ]},
-    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:10}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: €${ctx.parsed.y}`}}},
-      scales:{y:{ticks:{callback:v=>'€'+v,font:{size:10}},grid:{color:'rgba(0,0,0,0.05)'}},
-              x:{ticks:{font:{size:9},maxRotation:45,autoSkip:false},grid:{display:false}}}}});
-}
-
-function renderBook(data){
-  const empty=document.getElementById('bookEmpty');
-  const byW={};
-  data.forEach(r=>{
-    const diff=Math.round((new Date(r.depart_date)-new Date(r.checked_at))/(7*24*3600*1000));
-    if(diff<0||diff>52)return;
-    const b=Math.round(diff/2)*2;
-    if(!byW[b])byW[b]=[];byW[b].push(r.price_eur);
-  });
-  const keys=Object.keys(byW).map(Number).sort((a,b)=>b-a);
-  if(keys.length<3){empty.style.display='block';if(bookChart){bookChart.destroy();bookChart=null;}return;}
-  empty.style.display='none';
-  const avgs=keys.map(k=>Math.round(byW[k].reduce((a,b)=>a+b,0)/byW[k].length));
-  const counts=keys.map(k=>byW[k].length);
-  if(bookChart)bookChart.destroy();
-  bookChart=new Chart(document.getElementById('bookChart'),{type:'line',
-    data:{labels:keys.map(k=>k+'w before'),datasets:[{label:'Avg price',data:avgs,borderColor:'#d97706',backgroundColor:'#d9770612',tension:0.3,pointRadius:5,borderWidth:2.5}]},
-    options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'€'+ctx.parsed.y+' avg ('+counts[ctx.dataIndex]+' offers)'}}},
-      scales:{y:{ticks:{callback:v=>'€'+v,font:{size:11}},grid:{color:'rgba(0,0,0,0.05)'}},
-              x:{ticks:{font:{size:10},maxRotation:45},grid:{display:false}}}}});
-}
-
-function renderAirlines(data){
-  const m={};
-  data.forEach(r=>{const a=clean(r.airlines);if(!a)return;if(!m[a])m[a]={p:[],c:0};m[a].p.push(r.price_eur);});
-  const grp={};
-  data.forEach(r=>{const k=r.checked_at+'|'+r.depart_date;if(!grp[k]||r.price_eur<grp[k].p)grp[k]={p:r.price_eur,a:clean(r.airlines)};});
-  Object.values(grp).forEach(({a})=>{if(m[a])m[a].c++;});
-  const byAvg=Object.keys(m).filter(Boolean).sort((a,b)=>m[a].p.reduce((x,y)=>x+y,0)/m[a].p.length-m[b].p.reduce((x,y)=>x+y,0)/m[b].p.length);
-  const avgs=byAvg.map(a=>Math.round(m[a].p.reduce((x,y)=>x+y,0)/m[a].p.length));
-  const byCheap=[...byAvg].sort((a,b)=>m[b].c-m[a].c);
-  const cheapC=byCheap.map(a=>m[a].c);
-  if(airAvgChart)airAvgChart.destroy();
-  airAvgChart=new Chart(document.getElementById('airAvgChart'),{type:'bar',
-    data:{labels:byAvg,datasets:[{data:avgs,backgroundColor:byAvg.map((_,i)=>C[i%C.length]+'cc'),borderRadius:4}]},
-    options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'€'+ctx.parsed.x+' avg'}}},
-      scales:{x:{ticks:{callback:v=>'€'+v,font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
-  if(airCheapChart)airCheapChart.destroy();
-  airCheapChart=new Chart(document.getElementById('airCheapChart'),{type:'bar',
-    data:{labels:byCheap,datasets:[{data:cheapC,backgroundColor:'#0891b2cc',borderRadius:4}]},
-    options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.x+'× cheapest'}}},
-      scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
-}
-
-function populateAirlineFilter(data){
-  const sel=document.getElementById('fAirline'),cur=sel.value;
-  const airlines=[...new Set(data.map(r=>clean(r.airlines)).filter(Boolean))].sort();
-  sel.innerHTML='<option value="">All airlines</option>';
-  airlines.forEach(a=>{const o=document.createElement('option');o.value=a;o.textContent=a;sel.appendChild(o);});
-  if(airlines.includes(cur))sel.value=cur;
-}
-
-function applyFilters(){
-  const data=getFiltered();
-  const airline=document.getElementById('fAirline').value;
-  const stops=document.getElementById('fStops').value;
-  const fn=document.getElementById('fFlight').value.trim().toLowerCase();
-  let f=data.filter(r=>{
-    if(activeTableDeps.size>0&&!activeTableDeps.has(r.depart_date))return false;
-    if(airline&&clean(r.airlines)!==airline)return false;
-    if(stops==='0'&&r._stops_num!==0)return false;
-    if(stops==='1'&&r._stops_num!==1)return false;
-    if(stops==='2'&&(r._stops_num===null||r._stops_num<2))return false;
-    if(fn&&!(r._fn||'').toLowerCase().includes(fn))return false;
+function filteredRows() {
+  return allRows.filter(r => {
+    if (activeSeason === 'august' && r.season !== 'August') return false;
+    if (activeSeason === 'decjan' && r.season !== 'DecJan') return false;
     return true;
   });
-  f.sort((a,b)=>{
-    let va=a[sortCol],vb=b[sortCol];
-    if(['price_eur','_dur_mins','_stops_num'].includes(sortCol)){va=parseFloat(va)||0;vb=parseFloat(vb)||0;}
-    return(va<vb?-1:va>vb?1:0)*(sortAsc?1:-1);
-  });
-  document.getElementById('offerCount').textContent='· '+f.length+' offers shown';
-  const stopPill=n=>{
-    if(n===0)return '<span class="pill p-dir">Direct</span>';
-    if(n===1)return '<span class="pill p-s1">1 stop</span>';
-    if(n>=2)return `<span class="pill p-s2">${n} stops</span>`;
-    return '<span style="color:#e5e7eb">—</span>';
-  };
-  const chg=v=>{
-    if(v===null||isNaN(parseFloat(v)))return '<span class="cfl">—</span>';
-    const n=parseFloat(v);
-    return n>5?`<span class="cup">▲${Math.abs(n).toFixed(1)}%</span>`:n<-3?`<span class="cdn">▼${Math.abs(n).toFixed(1)}%</span>`:`<span class="cfl">→${Math.abs(n).toFixed(1)}%</span>`;
-  };
-  const pCls=p=>p<500?'plo':p>900?'phi':'pmd';
-  const fnHtml=s=>{
-    if(!s||!s.trim())return '<span style="color:#e5e7eb">—</span>';
-    return s.split(/,\s*/).filter(Boolean).map(n=>`<span class="fn">${n.trim()}</span>`).join('');
-  };
-  if(!f.length){document.getElementById('tableBody').innerHTML='<tr><td colspan="13" class="empty">No offers match filters</td></tr>';return;}
-  document.getElementById('tableBody').innerHTML=f.slice(0,300).map(r=>`
-    <tr>
-      <td style="color:#9ca3af;font-size:11px">${fmtDate(r.checked_at)}</td>
-      <td><span class="pill ${r.season==='August'?'p-aug':'p-dec'}">${r.season==='August'?'Aug':'Dec/Jan'}</span></td>
-      <td style="font-weight:600">${fmtDate(r.depart_date)}</td>
-      <td style="color:#6b7280">${fmtDate(r.return_date)}</td>
-      <td class="${pCls(r.price_eur)}">€${r.price_eur.toFixed(0)}</td>
-      <td>${chg(r.price_change_pct)}</td>
-      <td style="font-size:11px">${r.airlines||'—'}</td>
-      <td>${fnHtml(r._fn)}</td>
-      <td>${stopPill(r._stops_num)}</td>
-      <td style="font-weight:500">${fmtTime(r._dep_time)}</td>
-      <td style="color:#6b7280">${fmtTime(r._arr_time)}</td>
-      <td>${r._dur}</td>
-      <td style="color:${r._lay==='—'?'#e5e7eb':'#d97706'}">${r._lay}</td>
-    </tr>`).join('');
 }
 
-function setSort(col,btn){
-  if(sortCol===col)sortAsc=!sortAsc;else{sortCol=col;sortAsc=true;}
-  document.querySelectorAll('.sbtn').forEach(b=>b.classList.remove('on'));
-  if(btn)btn.classList.add('on');
-  applyFilters();
+function render() {
+  const rows = filteredRows();
+  const dash = document.getElementById('dashboard');
+  dash.innerHTML = buildHTML(rows);
+  attachEvents(rows);
+  buildCharts(rows);
+  renderTable(rows);
 }
-function clearFilters(){
-  document.getElementById('fAirline').value='';
-  document.getElementById('fStops').value='';
-  document.getElementById('fFlight').value='';
-  activeTableDeps.clear();
-  document.querySelectorAll('#tableDepToggle .tbtn').forEach(b=>b.classList.remove('on'));
-  applyFilters();
+
+function buildHTML(rows) {
+  const prices = rows.map(r => r.price_eur);
+  const cheapest = Math.min(...prices);
+  const cheapestRow = rows.find(r => r.price_eur === cheapest);
+  const avg = prices.reduce((a,b) => a+b, 0) / prices.length;
+  const weeks = new Set(rows.map(r => r.checked_at)).size;
+  const airlines = new Set(rows.flatMap(r => r.airlines.split(',').map(a => a.trim()))).size;
+
+  // insight 1: trend (last 2 "check weeks")
+  const sortedWeeks = [...new Set(rows.map(r => r.checked_at))].sort();
+  let trendText = 'Stable', trendClass = 'info';
+  if (sortedWeeks.length >= 2) {
+    const lastW = sortedWeeks[sortedWeeks.length - 1];
+    const prevW = sortedWeeks[sortedWeeks.length - 2];
+    const lastMin = Math.min(...rows.filter(r => r.checked_at === lastW).map(r => r.price_eur));
+    const prevMin = Math.min(...rows.filter(r => r.checked_at === prevW).map(r => r.price_eur));
+    const diff = ((lastMin - prevMin) / prevMin) * 100;
+    if (diff > 3) { trendText = `↑ Rising (+${diff.toFixed(1)}%)`; trendClass = 'warn'; }
+    else if (diff < -3) { trendText = `↓ Falling (${diff.toFixed(1)}%)`; trendClass = 'good'; }
+  }
+
+  // insight 2: biggest price drop per depart date
+  const byDepart = {};
+  rows.forEach(r => {
+    if (!byDepart[r.depart_date]) byDepart[r.depart_date] = [];
+    byDepart[r.depart_date].push(r);
+  });
+  let biggestDrop = null, biggestDropDate = '', biggestDropPct = 0;
+  Object.entries(byDepart).forEach(([d, drows]) => {
+    const ws = [...new Set(drows.map(r => r.checked_at))].sort();
+    if (ws.length < 2) return;
+    const first = Math.min(...drows.filter(r => r.checked_at === ws[0]).map(r => r.price_eur));
+    const last = Math.min(...drows.filter(r => r.checked_at === ws[ws.length-1]).map(r => r.price_eur));
+    const pct = ((last - first) / first) * 100;
+    if (pct < biggestDropPct) { biggestDropPct = pct; biggestDropDate = d; biggestDrop = last; }
+  });
+
+  // insight 3: rising price date
+  let risingDate = '', risingPct = 0;
+  Object.entries(byDepart).forEach(([d, drows]) => {
+    const ws = [...new Set(drows.map(r => r.checked_at))].sort();
+    if (ws.length < 2) return;
+    const first = Math.min(...drows.filter(r => r.checked_at === ws[0]).map(r => r.price_eur));
+    const last = Math.min(...drows.filter(r => r.checked_at === ws[ws.length-1]).map(r => r.price_eur));
+    const pct = ((last - first) / first) * 100;
+    if (pct > risingPct) { risingPct = pct; risingDate = d; }
+  });
+
+  const isDecJan = d => d && (d.includes('-12-') || d.includes('-01-') || d.startsWith('2027'));
+
+  return `
+  <!-- STATS BAR -->
+  <div id="stats-bar">
+    <div class="stat-card">
+      <div class="label">Cheapest ever</div>
+      <div class="value" style="color:var(--green)">€${cheapest.toFixed(0)}</div>
+      <div class="sub">${cheapestRow ? cheapestRow.airlines.split(',')[0].trim() : '—'}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Average price</div>
+      <div class="value">€${avg.toFixed(0)}</div>
+      <div class="sub">all offers</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Weeks tracked</div>
+      <div class="value">${weeks}</div>
+      <div class="sub">check runs</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total offers</div>
+      <div class="value">${rows.length.toLocaleString()}</div>
+      <div class="sub">collected</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Airlines seen</div>
+      <div class="value">${airlines}</div>
+      <div class="sub">unique carriers</div>
+    </div>
+  </div>
+
+  <!-- INSIGHTS -->
+  <div id="insights">
+    <div class="insight ${trendClass}">
+      <div class="i-label">Current trend</div>
+      <div class="i-value">${trendText}</div>
+      <div class="i-sub">Based on last 2 check dates</div>
+    </div>
+    <div class="insight good">
+      <div class="i-label">Biggest price drop</div>
+      <div class="i-value">${biggestDropDate ? fmtDate(biggestDropDate) + ' — ' + biggestDropPct.toFixed(1) + '%' : 'Not enough data'}</div>
+      <div class="i-sub">${biggestDrop ? 'Now €' + biggestDrop.toFixed(0) : ''}</div>
+    </div>
+    <div class="insight warn">
+      <div class="i-label">Rising prices ⚠</div>
+      <div class="i-value">${risingDate ? fmtDate(risingDate) : 'None detected'}</div>
+      <div class="i-sub">${risingDate ? '+' + risingPct.toFixed(1) + '% since first check' : ''}</div>
+    </div>
+  </div>
+
+  <!-- SEASON TABS -->
+  <div id="season-tabs">
+    <button class="stab ${activeSeason === 'all' ? 'active' : ''}" data-season="all">All seasons</button>
+    <button class="stab ${activeSeason === 'august' ? 'active' : ''}" data-season="august">☀ August</button>
+    <button class="stab decjan ${activeSeason === 'decjan' ? 'active' : ''}" data-season="decjan">🎄 Dec/Jan</button>
+  </div>
+
+  <!-- CHART 1: PRICE TREND -->
+  <div class="card">
+    <h2>Price trend <span class="badge">cheapest per week</span></h2>
+    <div class="toggle-row" id="trend-toggles"></div>
+    <div class="chart-container" style="height:280px">
+      <canvas id="chart-trend"></canvas>
+    </div>
+  </div>
+
+  <!-- CHART 2: HEATMAP -->
+  <div class="card">
+    <h2>Price heatmap <span class="badge">cheapest price per week</span></h2>
+    <div id="heatmap-wrap"><div id="heatmap-content"></div></div>
+  </div>
+
+  <!-- CHARTS 3 & 4 -->
+  <div class="charts-row charts-2">
+    <div class="card" style="margin-bottom:0">
+      <h2>Price range <span class="badge">min / avg / max per depart date</span></h2>
+      <div class="chart-container" style="height:260px">
+        <canvas id="chart-range"></canvas>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <h2>Best time to book <span class="badge">avg price vs weeks before departure</span></h2>
+      <div class="chart-container" style="height:260px">
+        <canvas id="chart-timing"></canvas>
+      </div>
+    </div>
+  </div>
+  <div style="margin-bottom:16px"></div>
+
+  <!-- CHART 5: AIRLINES -->
+  <div class="card">
+    <h2>Airlines</h2>
+    <div class="airlines-grid">
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:600">Average price per airline</div>
+        <div class="chart-container" style="height:240px"><canvas id="chart-airline-avg"></canvas></div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:600">Times cheapest per airline</div>
+        <div class="chart-container" style="height:240px"><canvas id="chart-airline-cheapest"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="card">
+    <h2>All collected offers</h2>
+    <div id="table-filters">
+      <!-- date toggles injected here -->
+      <div class="toggle-row" id="table-date-toggles" style="margin-bottom:0;flex:100%"></div>
+      <select class="filter-select" id="f-airline"><option value="">All airlines</option></select>
+      <select class="filter-select" id="f-stops">
+        <option value="any">Any stops</option>
+        <option value="direct">Direct only</option>
+        <option value="1">1 stop</option>
+        <option value="2">2+ stops</option>
+      </select>
+      <input class="filter-input" id="f-flight" placeholder="Flight no. search" style="width:160px">
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:11px;color:var(--muted);font-weight:600">Sort:</span>
+        <button class="sort-btn ${tableSort==='price'?'active':''}" data-sort="price">Price</button>
+        <button class="sort-btn ${tableSort==='depart'?'active':''}" data-sort="depart">Dep date</button>
+        <button class="sort-btn ${tableSort==='week'?'active':''}" data-sort="week">Week</button>
+        <button class="sort-btn ${tableSort==='duration'?'active':''}" data-sort="duration">Duration</button>
+      </div>
+      <button class="clear-btn" id="clear-filters">✕ Clear</button>
+      <span id="table-count"></span>
+    </div>
+    <div id="offers-table-wrap">
+      <table id="offers-table">
+        <thead>
+          <tr>
+            <th>Week</th><th>Season</th><th>Depart</th><th>Return</th>
+            <th>Price €</th><th>Chg</th><th>Airline(s)</th><th>Flight nos.</th>
+            <th>Stops</th><th>Dep time</th><th>Arr time</th><th>Duration</th><th>Layover</th>
+          </tr>
+        </thead>
+        <tbody id="offers-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  `;
 }
-function setSeason(s,el){
-  activeSeason=s;activeTrendDeps.clear();activeTableDeps.clear();
-  document.querySelectorAll('#seasonTabs .tbtn').forEach(t=>t.classList.remove('on'));
-  el.classList.add('on');renderAll();
+
+function attachEvents(rows) {
+  // season tabs
+  document.querySelectorAll('.stab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeSeason = btn.dataset.season;
+      activeTableDates = new Set();
+      tableAirline = ''; tableStops = 'any'; tableFlightSearch = '';
+      destroyCharts();
+      render();
+    });
+  });
+
+  // trend toggles — build from data
+  const datesForTrend = [...new Set(filteredRows().map(r => r.depart_date))].sort();
+  const toggleRow = document.getElementById('trend-toggles');
+  const isDecJan = d => d && (d.includes('-12-') || d.includes('-01-') || d.startsWith('2027') || (d.split('-')[1] === '01'));
+  datesForTrend.forEach((d, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'dtog' + (isDecJan(d) ? ' decjan' : '');
+    btn.dataset.date = d;
+    btn.textContent = fmtDate(d);
+    if (i === 0) btn.classList.add('active');
+    btn.addEventListener('click', () => {
+      btn.classList.toggle('active');
+      buildTrendChart(filteredRows());
+    });
+    toggleRow.appendChild(btn);
+  });
+
+  // table date toggles
+  const tableDateRow = document.getElementById('table-date-toggles');
+  datesForTrend.forEach(d => {
+    const btn = document.createElement('button');
+    btn.className = 'dtog' + (isDecJan(d) ? ' decjan' : '');
+    btn.dataset.tdate = d;
+    btn.textContent = fmtDate(d);
+    if (activeTableDates.has(d)) btn.classList.add('active');
+    btn.addEventListener('click', () => {
+      btn.classList.toggle('active');
+      if (activeTableDates.has(d)) activeTableDates.delete(d);
+      else activeTableDates.add(d);
+      renderTable(filteredRows());
+    });
+    tableDateRow.appendChild(btn);
+  });
+
+  // airline dropdown
+  const airlineSet = new Set(rows.flatMap(r => r.airlines.split(',').map(a => a.trim())));
+  const sel = document.getElementById('f-airline');
+  [...airlineSet].sort().forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a; opt.textContent = a;
+    if (a === tableAirline) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', () => { tableAirline = sel.value; renderTable(filteredRows()); });
+
+  document.getElementById('f-stops').value = tableStops;
+  document.getElementById('f-stops').addEventListener('change', e => { tableStops = e.target.value; renderTable(filteredRows()); });
+
+  document.getElementById('f-flight').value = tableFlightSearch;
+  document.getElementById('f-flight').addEventListener('input', e => { tableFlightSearch = e.target.value; renderTable(filteredRows()); });
+
+  document.querySelectorAll('.sort-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      tableSort = btn.dataset.sort;
+      document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b === btn));
+      renderTable(filteredRows());
+    });
+  });
+
+  document.getElementById('clear-filters').addEventListener('click', () => {
+    tableAirline = ''; tableStops = 'any'; tableFlightSearch = ''; tableSort = 'price'; activeTableDates = new Set();
+    document.getElementById('f-airline').value = '';
+    document.getElementById('f-stops').value = 'any';
+    document.getElementById('f-flight').value = '';
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === 'price'));
+    document.querySelectorAll('[data-tdate]').forEach(b => b.classList.remove('active'));
+    renderTable(filteredRows());
+  });
 }
-function renderAll(){
-  const data=getFiltered();if(!data.length)return;
-  renderStats(data);renderInsights(data);
-  buildToggle(data,'depToggle',activeTrendDeps,()=>renderTrend(data),'trend');renderTrend(data);
-  renderHeatmap(data);renderRange(data);renderBook(data);renderAirlines(data);
-  populateAirlineFilter(data);
-  buildToggle(data,'tableDepToggle',activeTableDeps,applyFilters,'table');
-  applyFilters();
+
+// ── CHARTS ────────────────────────────────────────────────────────────────────
+
+const GREEN = '#0f6e56', BLUE = '#1e5ba8';
+const PALETTE = ['#0f6e56','#1e5ba8','#d97706','#7c3aed','#dc2626','#0891b2','#65a30d','#db2777','#ea580c','#0284c7'];
+
+function buildCharts(rows) {
+  buildTrendChart(rows);
+  buildHeatmap(rows);
+  buildRangeChart(rows);
+  buildTimingChart(rows);
+  buildAirlineCharts(rows);
 }
+
+function buildTrendChart(rows) {
+  if (charts['trend']) { charts['trend'].destroy(); delete charts['trend']; }
+
+  const activeDates = [...document.querySelectorAll('.dtog.active')].map(b => b.dataset.date).filter(Boolean);
+  if (!activeDates.length) {
+    // pick first date
+    const firstBtn = document.querySelector('.dtog[data-date]');
+    if (firstBtn) { firstBtn.classList.add('active'); activeDates.push(firstBtn.dataset.date); }
+  }
+
+  const allWeeks = [...new Set(rows.map(r => r.checked_at))].sort();
+  const isDecJan = d => d && (d.includes('-12-') || d.includes('-01-') || d.startsWith('2027') || (d.split('-')[1]==='01'));
+
+  const datasets = activeDates.map((d, i) => {
+    const data = allWeeks.map(w => {
+      const matching = rows.filter(r => r.checked_at === w && r.depart_date === d);
+      return matching.length ? Math.min(...matching.map(r => r.price_eur)) : null;
+    });
+    const col = isDecJan(d) ? PALETTE[i % PALETTE.length] : PALETTE[i % PALETTE.length];
+    return {
+      label: fmtDate(d),
+      data, borderColor: col, backgroundColor: col + '22',
+      pointRadius: 4, pointHoverRadius: 6,
+      tension: 0.3, spanGaps: true, fill: false, borderWidth: 2
+    };
+  });
+
+  const ctx = document.getElementById('chart-trend');
+  if (!ctx) return;
+  charts['trend'] = new Chart(ctx, {
+    type: 'line',
+    data: { labels: allWeeks.map(fmtDate), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } },
+                 tooltip: { callbacks: { label: ctx => `€${ctx.parsed.y}` } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: { ticks: { callback: v => '€' + v, font: { size: 11 } }, grid: { color: '#f3f4f6' } }
+      }
+    }
+  });
+}
+
+function buildHeatmap(rows) {
+  const departures = [...new Set(rows.map(r => r.depart_date))].sort();
+  const weeks = [...new Set(rows.map(r => r.checked_at))].sort();
+
+  // build min price matrix
+  const matrix = {};
+  departures.forEach(d => {
+    matrix[d] = {};
+    weeks.forEach(w => {
+      const matching = rows.filter(r => r.depart_date === d && r.checked_at === w);
+      matrix[d][w] = matching.length ? Math.min(...matching.map(r => r.price_eur)) : null;
+    });
+  });
+
+  const allVals = Object.values(matrix).flatMap(row => Object.values(row).filter(v => v != null));
+  const minV = Math.min(...allVals), maxV = Math.max(...allVals);
+
+  let html = '<div id="heatmap-wrap"><table id="heatmap-table"><thead><tr><th class="row-label">Departure</th>';
+  weeks.forEach(w => { html += `<th>${fmtDate(w)}</th>`; });
+  html += '</tr></thead><tbody>';
+  departures.forEach(d => {
+    html += `<tr><td class="row-label">${fmtDate(d)}</td>`;
+    weeks.forEach(w => {
+      const v = matrix[d][w];
+      const bg = heatColor(v, minV, maxV);
+      html += v != null
+        ? `<td style="background:${bg}">€${v.toFixed(0)}</td>`
+        : '<td style="color:#d1d5db">—</td>';
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('heatmap-content').innerHTML = html;
+}
+
+function buildRangeChart(rows) {
+  const departures = [...new Set(rows.map(r => r.depart_date))].sort();
+  const mins = [], avgs = [], maxs = [];
+  departures.forEach(d => {
+    const ps = rows.filter(r => r.depart_date === d).map(r => r.price_eur);
+    mins.push(Math.min(...ps));
+    avgs.push(ps.reduce((a,b)=>a+b,0)/ps.length);
+    maxs.push(Math.max(...ps));
+  });
+
+  const ctx = document.getElementById('chart-range');
+  if (!ctx) return;
+  charts['range'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: departures.map(fmtDate),
+      datasets: [
+        { label: 'Min', data: mins, backgroundColor: '#0f6e5688', borderColor: GREEN, borderWidth: 1.5, borderRadius: 4 },
+        { label: 'Avg', data: avgs, backgroundColor: '#1e5ba888', borderColor: BLUE, borderWidth: 1.5, borderRadius: 4 },
+        { label: 'Max', data: maxs, backgroundColor: '#dc262644', borderColor: '#dc2626', borderWidth: 1.5, borderRadius: 4 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+                 tooltip: { callbacks: { label: ctx => `€${ctx.parsed.y.toFixed(0)}` } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+        y: { ticks: { callback: v => '€' + v, font: { size: 11 } }, grid: { color: '#f3f4f6' } }
+      }
+    }
+  });
+}
+
+function buildTimingChart(rows) {
+  // for each row, compute weeks before departure
+  const points = {};
+  rows.forEach(r => {
+    const dep = new Date(r.depart_date);
+    const chk = new Date(r.checked_at);
+    const wksBefore = Math.round((dep - chk) / (7 * 86400000));
+    if (wksBefore < 0 || wksBefore > 52) return;
+    if (!points[wksBefore]) points[wksBefore] = [];
+    points[wksBefore].push(r.price_eur);
+  });
+
+  const sortedWks = Object.keys(points).map(Number).sort((a,b) => b - a);
+  const labels = sortedWks.map(w => w === 0 ? 'This week' : `${w}w before`);
+  const data = sortedWks.map(w => {
+    const ps = points[w];
+    return ps.reduce((a,b)=>a+b,0)/ps.length;
+  });
+
+  const ctx = document.getElementById('chart-timing');
+  if (!ctx) return;
+  charts['timing'] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Avg price',
+        data, borderColor: BLUE, backgroundColor: BLUE + '15',
+        fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false },
+                 tooltip: { callbacks: { label: ctx => `€${ctx.parsed.y.toFixed(0)}` } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 }, maxTicksLimit: 12 } },
+        y: { ticks: { callback: v => '€' + v, font: { size: 11 } }, grid: { color: '#f3f4f6' } }
+      }
+    }
+  });
+}
+
+function buildAirlineCharts(rows) {
+  // parse airline from airlines field (can be "A, B")
+  const airlineData = {};
+  rows.forEach(r => {
+    const als = r.airlines.split(',').map(a => a.trim()).filter(Boolean);
+    const primary = als[0] || 'Unknown';
+    if (!airlineData[primary]) airlineData[primary] = { prices: [], cheapestCount: 0 };
+    airlineData[primary].prices.push(r.price_eur);
+  });
+
+  // cheapest per depart_date + checked_at
+  const groups = {};
+  rows.forEach(r => {
+    const k = r.depart_date + '|' + r.checked_at;
+    if (!groups[k] || r.price_eur < groups[k].price) groups[k] = { price: r.price_eur, airline: r.airlines.split(',')[0].trim() };
+  });
+  Object.values(groups).forEach(g => {
+    if (airlineData[g.airline]) airlineData[g.airline].cheapestCount++;
+  });
+
+  const sorted = Object.entries(airlineData).sort((a,b) => {
+    return (b[1].prices.reduce((x,y)=>x+y,0)/b[1].prices.length) - (a[1].prices.reduce((x,y)=>x+y,0)/a[1].prices.length);
+  });
+  const labels = sorted.map(([k]) => k);
+  const avgPrices = sorted.map(([,v]) => Math.round(v.prices.reduce((a,b)=>a+b,0)/v.prices.length));
+  const cheapestCounts = sorted.map(([,v]) => v.cheapestCount);
+
+  const ctx1 = document.getElementById('chart-airline-avg');
+  if (ctx1) {
+    charts['airline-avg'] = new Chart(ctx1, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ label: 'Avg price', data: avgPrices,
+          backgroundColor: labels.map((_,i) => PALETTE[i % PALETTE.length] + 'cc'),
+          borderRadius: 5, borderSkipped: false }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `€${c.parsed.x}` } } },
+        scales: { x: { ticks: { callback: v => '€'+v, font: { size: 11 } }, grid: { color: '#f3f4f6' } },
+                  y: { ticks: { font: { size: 11 } }, grid: { display: false } } }
+      }
+    });
+  }
+
+  const sortedByCount = Object.entries(airlineData).sort((a,b) => b[1].cheapestCount - a[1].cheapestCount);
+  const ctx2 = document.getElementById('chart-airline-cheapest');
+  if (ctx2) {
+    charts['airline-cheapest'] = new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels: sortedByCount.map(([k]) => k),
+        datasets: [{ label: 'Times cheapest', data: sortedByCount.map(([,v]) => v.cheapestCount),
+          backgroundColor: sortedByCount.map((_,i) => PALETTE[i % PALETTE.length] + 'cc'),
+          borderRadius: 5, borderSkipped: false }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { x: { ticks: { font: { size: 11 } }, grid: { color: '#f3f4f6' } },
+                  y: { ticks: { font: { size: 11 } }, grid: { display: false } } }
+      }
+    });
+  }
+}
+
+// ── TABLE ─────────────────────────────────────────────────────────────────────
+
+function renderTable(baseRows) {
+  let rows = [...baseRows];
+
+  // date filter
+  if (activeTableDates.size > 0) rows = rows.filter(r => activeTableDates.has(r.depart_date));
+  // airline filter
+  if (tableAirline) rows = rows.filter(r => r.airlines.includes(tableAirline));
+  // stops filter
+  if (tableStops === 'direct') rows = rows.filter(r => r.out_stops === 0);
+  else if (tableStops === '1') rows = rows.filter(r => r.out_stops === 1);
+  else if (tableStops === '2') rows = rows.filter(r => r.out_stops >= 2);
+  // flight search
+  if (tableFlightSearch) {
+    const q = tableFlightSearch.toLowerCase();
+    rows = rows.filter(r => r.out_flight_nums.toLowerCase().includes(q) || r.airlines.toLowerCase().includes(q));
+  }
+  // sort
+  if (tableSort === 'price') rows.sort((a,b) => a.price_eur - b.price_eur);
+  else if (tableSort === 'depart') rows.sort((a,b) => a.depart_date.localeCompare(b.depart_date));
+  else if (tableSort === 'week') rows.sort((a,b) => b.checked_at.localeCompare(a.checked_at));
+  else if (tableSort === 'duration') rows.sort((a,b) => a.out_duration - b.out_duration);
+
+  document.getElementById('table-count').textContent = `${rows.length} row${rows.length !== 1 ? 's' : ''}`;
+
+  const tbody = document.getElementById('offers-tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = rows.map(r => {
+    const isDecJan = r.season === 'DecJan';
+    const seasonPill = isDecJan
+      ? '<span class="pill pill-dec">🎄 Dec/Jan</span>'
+      : '<span class="pill pill-aug">☀ Aug</span>';
+
+    let priceClass = 'price-normal';
+    if (r.price_eur < 500) priceClass = 'price-low-text';
+    else if (r.price_eur > 900) priceClass = 'price-high-text';
+
+    let chgHtml = '<span class="chg-neu">—</span>';
+    if (r.price_change_pct != null) {
+      const pct = r.price_change_pct;
+      if (pct > 1) chgHtml = `<span class="chg-up">▲ +${pct.toFixed(1)}%</span>`;
+      else if (pct < -1) chgHtml = `<span class="chg-dn">▼ ${pct.toFixed(1)}%</span>`;
+      else chgHtml = `<span class="chg-neu">${pct.toFixed(1)}%</span>`;
+    }
+
+    let stopsPill;
+    if (r.out_stops === 0) stopsPill = '<span class="pill pill-direct">Direct</span>';
+    else if (r.out_stops === 1) stopsPill = '<span class="pill pill-1stop">1 stop</span>';
+    else stopsPill = `<span class="pill pill-2stop">${r.out_stops} stops</span>`;
+
+    let flightNos = '—';
+    if (r.out_flight_nums) {
+      flightNos = r.out_flight_nums.split(',').map(f => `<span class="flight-chip">${f.trim()}</span>`).join('');
+    }
+
+    let duration = '—';
+    if (r.out_duration_fmt) duration = r.out_duration_fmt;
+    else if (r.out_duration) duration = fmtMins(r.out_duration);
+
+    let layover = '—';
+    if (r.out_layover_fmt) layover = r.out_layover_fmt;
+    else if (r.out_layover_min) layover = fmtMins(r.out_layover_min);
+
+    return `<tr>
+      <td>${fmtDate(r.checked_at)}</td>
+      <td>${seasonPill}</td>
+      <td>${fmtDate(r.depart_date)}</td>
+      <td>${fmtDate(r.return_date)}</td>
+      <td class="${priceClass}">€${r.price_eur.toFixed(0)}</td>
+      <td>${chgHtml}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${r.airlines}</td>
+      <td>${flightNos}</td>
+      <td>${stopsPill}</td>
+      <td>${fmtTime(r.out_dep_time)}</td>
+      <td>${fmtTime(r.out_arr_time)}</td>
+      <td>${duration}</td>
+      <td>${layover}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── boot ─────────────────────────────────────────────────────────────────────
 loadData();
 </script>
 </body>
