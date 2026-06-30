@@ -745,7 +745,9 @@ function buildHTML(rows) {
           <tr>
             <th>Week</th><th>Season</th><th>Depart</th><th>Return</th>
             <th>Price €</th><th>Chg</th><th>Airline(s)</th><th>Flight nos.</th>
-            <th>Stops</th><th>Dep time</th><th>Arr time</th><th>Duration</th><th>Layover</th>
+            <th>Stops</th>
+            <th>Out dep</th><th>Out arr</th><th>Out duration</th><th>Out layover</th>
+            <th>Ret stops</th><th>Ret dep</th><th>Ret arr</th><th>Ret duration</th><th>Ret layover</th>
           </tr>
         </thead>
         <tbody id="offers-tbody"></tbody>
@@ -1127,6 +1129,13 @@ function renderTable(baseRows) {
     else if (r.out_stops === 1) stopsPill = '<span class="pill pill-1stop">1 stop</span>';
     else stopsPill = `<span class="pill pill-2stop">${r.out_stops} stops</span>`;
 
+    let retStopsPill = '<span style="color:var(--muted)">—</span>';
+    if (r.ret_dep_time || r.ret_arr_time || r.ret_duration) {
+      if (r.ret_stops === 0) retStopsPill = '<span class="pill pill-direct">Direct</span>';
+      else if (r.ret_stops === 1) retStopsPill = '<span class="pill pill-1stop">1 stop</span>';
+      else retStopsPill = `<span class="pill pill-2stop">${r.ret_stops} stops</span>`;
+    }
+
     let flightNos = '—';
     if (r.out_flight_nums) {
       flightNos = r.out_flight_nums.split(',').map(f => `<span class="flight-chip">${f.trim()}</span>`).join('');
@@ -1139,6 +1148,14 @@ function renderTable(baseRows) {
     let layover = '—';
     if (r.out_layover_fmt) layover = r.out_layover_fmt;
     else if (r.out_layover_min) layover = fmtMins(r.out_layover_min);
+
+    let retDuration = '—';
+    if (r.ret_duration_fmt) retDuration = r.ret_duration_fmt;
+    else if (r.ret_duration) retDuration = fmtMins(r.ret_duration);
+
+    let retLayover = '—';
+    if (r.ret_layover_fmt) retLayover = r.ret_layover_fmt;
+    else if (r.ret_layover_min) retLayover = fmtMins(r.ret_layover_min);
 
     return `<tr>
       <td>${fmtDate(r.checked_at)}</td>
@@ -1154,6 +1171,11 @@ function renderTable(baseRows) {
       <td>${fmtTime(r.out_arr_time)}</td>
       <td>${duration}</td>
       <td>${layover}</td>
+      <td>${retStopsPill}</td>
+      <td>${fmtTime(r.ret_dep_time)}</td>
+      <td>${fmtTime(r.ret_arr_time)}</td>
+      <td>${retDuration}</td>
+      <td>${retLayover}</td>
     </tr>`;
   }).join('');
 }
