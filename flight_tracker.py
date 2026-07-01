@@ -235,14 +235,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-import json
-
-data = search_flights(depart, ret)
-# Add this temporarily after the search call:
-print(json.dumps(list(data.keys()), indent=2))
-
-# And for one flight object:
-all_flights = data.get("best_flights", []) + data.get("other_flights", [])
-if all_flights:
-    print(json.dumps(all_flights[0], indent=2))
