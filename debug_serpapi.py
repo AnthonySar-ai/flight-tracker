@@ -2,7 +2,7 @@ import json
 import os
 import requests
 
-SERPAPI_KEY = os.environ["2c1f7d8567f8164003072c293e8a872e244a014999db2711205f426679334746"]
+SERPAPI_KEY = os.environ["SERPAPI_KEY"]
 
 params = {
     "engine":        "google_flights",
