@@ -8,6 +8,12 @@ Tracks:
 Captures: price, airlines, flight numbers, times, duration, layover, stops.
 Disruption signals: airline_count, zero-result logging, price_change_pct.
 Runs twice a week via GitHub Actions (Mon + Thu).
+
+Return leg strategy (Option 3 — credit efficient):
+  For each date pair, we make ONE extra API call using the departure_token
+  of the cheapest outbound flight only. That return leg data is then applied
+  to ALL outbound rows for that date pair. This keeps extra calls to ~1 per
+  date pair rather than 1 per outbound result.
 """
 
 import os
@@ -37,7 +43,6 @@ def get_christmas_departure(year):
     """
     Saturday before Dec 24.
     If that Saturday falls on Dec 23 or later, shift back one week.
-    This ensures arrival well before Christmas Eve.
     """
     dec24 = date(year, 12, 24)
     days_back = (dec24.weekday() + 2) % 7
@@ -50,18 +55,10 @@ def get_christmas_departure(year):
 
 
 def get_dates_to_track():
-    """
-    Build all (depart, return, season) tuples to query this run.
-    Each August departure gets 2 return options (Sat + Sun).
-    Each Christmas departure gets 2 return options (Sat + Sun).
-    Tracks current year and next year.
-    Only includes dates still in the future.
-    """
     today = date.today()
     pairs = []
 
     for year in [today.year, today.year + 1]:
-        # August
         for dep in get_august_departures(year):
             if dep <= today:
                 continue
@@ -70,7 +67,6 @@ def get_dates_to_track():
             pairs.append((dep, ret_sat, "August"))
             pairs.append((dep, ret_sun, "August"))
 
-        # Christmas
         dep = get_christmas_departure(year)
         if dep > today:
             ret_sat = dep + timedelta(weeks=2)
@@ -81,17 +77,37 @@ def get_dates_to_track():
     return pairs
 
 
-def search_flights(depart_date, return_date):
+def search_outbound(depart_date, return_date):
+    """First API call — fetches outbound flights for a date pair."""
     params = {
-        "engine":           "google_flights",
-        "departure_id":     ORIGIN,
-        "arrival_id":       DESTINATION,
-        "outbound_date":    depart_date.strftime("%Y-%m-%d"),
-        "return_date":      return_date.strftime("%Y-%m-%d"),
-        "currency":         "EUR",
-        "hl":               "en",
-        "type":             "1",
-        "api_key":          SERPAPI_KEY,
+        "engine":        "google_flights",
+        "departure_id":  ORIGIN,
+        "arrival_id":    DESTINATION,
+        "outbound_date": depart_date.strftime("%Y-%m-%d"),
+        "return_date":   return_date.strftime("%Y-%m-%d"),
+        "currency":      "EUR",
+        "hl":            "en",
+        "type":          "1",
+        "api_key":       SERPAPI_KEY,
+    }
+    resp = requests.get(SERPAPI_URL, params=params, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def search_return_leg(departure_token):
+    """
+    Second API call — uses the departure_token from a chosen outbound flight
+    to fetch available return flights. Called once per date pair (cheapest
+    outbound only) to keep credit usage low.
+    """
+    params = {
+        "engine":          "google_flights",
+        "departure_token": departure_token,
+        "currency":        "EUR",
+        "hl":              "en",
+        "type":            "1",
+        "api_key":         SERPAPI_KEY,
     }
     resp = requests.get(SERPAPI_URL, params=params, timeout=30)
     resp.raise_for_status()
@@ -104,13 +120,63 @@ def format_duration(minutes):
     try:
         m = int(minutes)
         return f"{m // 60}h{m % 60:02d}"
-    except:
+    except Exception:
         return str(minutes)
 
 
 def clean_airline_name(name):
-    """Remove leading/trailing quotes and whitespace."""
     return str(name).strip().strip('"').strip("'").strip()
+
+
+def extract_return_info(departure_token):
+    """
+    Fetches return flights using departure_token and returns a dict with
+    the cheapest return leg's details. Returns an empty dict on failure.
+    Called ONCE per date pair, not once per outbound result.
+    """
+    try:
+        data = search_return_leg(departure_token)
+    except Exception as e:
+        print(f"      ⚠ Return leg API call failed: {e}")
+        return {}
+
+    ret_flights = data.get("best_flights", []) + data.get("other_flights", [])
+    if not ret_flights:
+        print(f"      ⚠ Return leg call returned zero results")
+        return {}
+
+    # Pick the cheapest return option
+    ret_flights.sort(key=lambda f: f.get("price") or 999999)
+    best = ret_flights[0]
+    legs = best.get("flights", [])
+
+    ret_airlines    = []
+    ret_flight_nums = []
+    for leg in legs:
+        a  = clean_airline_name(leg.get("airline", ""))
+        fn = leg.get("flight_number", "")
+        if a:
+            ret_airlines.append(a)
+        if fn:
+            ret_flight_nums.append(fn)
+
+    ret_stops       = len(legs) - 1 if legs else 0
+    ret_dep_time    = legs[0].get("departure_airport", {}).get("time", "") if legs else ""
+    ret_arr_time    = legs[-1].get("arrival_airport", {}).get("time", "") if legs else ""
+    ret_dur_min     = best.get("total_duration", "")
+    ret_layover_min = sum(lay.get("duration", 0) for lay in best.get("layovers", []))
+
+    return {
+        "ret_airlines":     ", ".join(dict.fromkeys(ret_airlines)),
+        "ret_flight_nums":  ", ".join(ret_flight_nums),
+        "ret_stops":        ret_stops,
+        "ret_dep_time":     ret_dep_time,
+        "ret_arr_time":     ret_arr_time,
+        "ret_duration":     str(ret_dur_min),
+        "ret_duration_fmt": format_duration(ret_dur_min),
+        "ret_layover_min":  ret_layover_min if ret_stops > 0 else "",
+        "ret_layover_fmt":  format_duration(ret_layover_min) if ret_stops > 0 else "",
+    }
 
 
 def parse_results(data, depart_date, return_date, season, checked_at):
@@ -118,15 +184,27 @@ def parse_results(data, depart_date, return_date, season, checked_at):
     all_flights = data.get("best_flights", []) + data.get("other_flights", [])
     all_airlines_this_date = set()
 
-    for flight in all_flights:
-        price = flight.get("price")
-        if price is None:
-            continue
-        legs = flight.get("flights", [])
-        if not legs:
-            continue
+    if not all_flights:
+        return records, all_airlines_this_date
 
-        # Outbound
+    # ── Find cheapest outbound to use for the single return leg call ──────────
+    valid_flights = [f for f in all_flights if f.get("price") is not None and f.get("flights")]
+    if not valid_flights:
+        return records, all_airlines_this_date
+
+    cheapest_outbound = min(valid_flights, key=lambda f: f.get("price", 999999))
+    cheapest_token    = cheapest_outbound.get("departure_token", "")
+
+    # ONE extra API call for the return leg, shared across all outbound rows
+    ret_info = {}
+    if cheapest_token:
+        print(f"      → Fetching return leg via departure_token (1 extra call)...")
+        ret_info = extract_return_info(cheapest_token)
+
+    # ── Build one record per outbound flight ──────────────────────────────────
+    for flight in valid_flights:
+        legs = flight.get("flights", [])
+
         out_airlines    = []
         out_flight_nums = []
         out_dep_time    = legs[0].get("departure_airport", {}).get("time", "")
@@ -152,31 +230,12 @@ def parse_results(data, depart_date, return_date, season, checked_at):
                 seen.add(a)
                 out_airlines_dedup.append(a)
 
-        # Return
-        ret_info        = flight.get("return_flights", {}) or {}
-        ret_legs        = ret_info.get("flights", [])
-        ret_airlines    = []
-        ret_flight_nums = []
-        ret_dep_time    = ret_legs[0].get("departure_airport", {}).get("time", "") if ret_legs else ""
-        ret_arr_time    = ret_legs[-1].get("arrival_airport", {}).get("time", "") if ret_legs else ""
-        ret_dur_min     = ret_info.get("total_duration", "")
-        ret_stops       = len(ret_legs) - 1 if ret_legs else ""
-        ret_layover_min = sum(lay.get("duration", 0) for lay in ret_info.get("layovers", []))
-
-        for leg in ret_legs:
-            a  = clean_airline_name(leg.get("airline", ""))
-            fn = leg.get("flight_number", "")
-            if a:
-                ret_airlines.append(a)
-            if fn:
-                ret_flight_nums.append(fn)
-
         records.append({
             "checked_at":       checked_at,
             "season":           season,
             "depart_date":      depart_date.strftime("%Y-%m-%d"),
             "return_date":      return_date.strftime("%Y-%m-%d"),
-            "price_eur":        float(price),
+            "price_eur":        float(flight.get("price")),
             "airlines":         ", ".join(out_airlines_dedup),
             "out_flight_nums":  ", ".join(out_flight_nums),
             "out_stops":        out_stops,
@@ -186,15 +245,16 @@ def parse_results(data, depart_date, return_date, season, checked_at):
             "out_duration_fmt": format_duration(out_dur_min),
             "out_layover_min":  out_layover_min if out_stops > 0 else "",
             "out_layover_fmt":  format_duration(out_layover_min) if out_stops > 0 else "",
-            "ret_airlines":     ", ".join(dict.fromkeys(ret_airlines)),
-            "ret_flight_nums":  ", ".join(ret_flight_nums),
-            "ret_stops":        ret_stops,
-            "ret_dep_time":     ret_dep_time,
-            "ret_arr_time":     ret_arr_time,
-            "ret_duration":     str(ret_dur_min),
-            "ret_duration_fmt": format_duration(ret_dur_min),
-            "ret_layover_min":  ret_layover_min if ret_legs and str(ret_stops) not in ("", "0") else "",
-            "ret_layover_fmt":  format_duration(ret_layover_min) if ret_legs and str(ret_stops) not in ("", "0") else "",
+            # Return leg — same for all rows (from cheapest outbound token)
+            "ret_airlines":     ret_info.get("ret_airlines", ""),
+            "ret_flight_nums":  ret_info.get("ret_flight_nums", ""),
+            "ret_stops":        ret_info.get("ret_stops", ""),
+            "ret_dep_time":     ret_info.get("ret_dep_time", ""),
+            "ret_arr_time":     ret_info.get("ret_arr_time", ""),
+            "ret_duration":     ret_info.get("ret_duration", ""),
+            "ret_duration_fmt": ret_info.get("ret_duration_fmt", ""),
+            "ret_layover_min":  ret_info.get("ret_layover_min", ""),
+            "ret_layover_fmt":  ret_info.get("ret_layover_fmt", ""),
             "airline_count":    len(all_airlines_this_date),
             "price_change_pct": "",
         })
@@ -216,7 +276,7 @@ def main():
         ret_str    = ret.strftime("%Y-%m-%d")
         print(f"  [{season}] NCE→BEY  {depart_str} → {ret_str} ...")
         try:
-            data    = search_flights(depart, ret)
+            data = search_outbound(depart, ret)
             records, airlines_seen = parse_results(data, depart, ret, season, checked_at)
             if not records:
                 print(f"    ⚠ ZERO results — logging disruption signal")
