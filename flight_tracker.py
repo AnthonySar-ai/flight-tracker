@@ -10,10 +10,13 @@ Disruption signals: airline_count, zero-result logging, price_change_pct.
 Runs twice a week via GitHub Actions (Mon + Thu).
 
 Return leg strategy (Option 3 — credit efficient):
-  For each date pair, we make ONE extra API call using the departure_token
-  of the cheapest outbound flight only. That return leg data is then applied
-  to ALL outbound rows for that date pair. This keeps extra calls to ~1 per
-  date pair rather than 1 per outbound result.
+  For each date pair, ONE extra API call is made using the departure_token
+  of the cheapest outbound flight. The return leg data is applied to ALL
+  outbound rows for that date pair.
+
+  FIX: The second (return leg) call must NOT include type=1 or any date
+  parameters — only engine, departure_token, currency, hl, and api_key.
+  Passing type=1 alongside departure_token causes a 400 Bad Request.
 """
 
 import os
@@ -97,16 +100,18 @@ def search_outbound(depart_date, return_date):
 
 def search_return_leg(departure_token):
     """
-    Second API call — uses the departure_token from a chosen outbound flight
-    to fetch available return flights. Called once per date pair (cheapest
-    outbound only) to keep credit usage low.
+    Second API call — uses departure_token to fetch return flights.
+
+    IMPORTANT: Do NOT pass type, outbound_date, return_date, departure_id,
+    or arrival_id here. The docs show the second call only needs engine,
+    departure_token, currency, hl, and api_key. Passing extra parameters
+    (especially type=1) causes a 400 Bad Request error.
     """
     params = {
         "engine":          "google_flights",
         "departure_token": departure_token,
         "currency":        "EUR",
         "hl":              "en",
-        "type":            "1",
         "api_key":         SERPAPI_KEY,
     }
     resp = requests.get(SERPAPI_URL, params=params, timeout=30)
@@ -187,21 +192,23 @@ def parse_results(data, depart_date, return_date, season, checked_at):
     if not all_flights:
         return records, all_airlines_this_date
 
-    # ── Find cheapest outbound to use for the single return leg call ──────────
     valid_flights = [f for f in all_flights if f.get("price") is not None and f.get("flights")]
     if not valid_flights:
         return records, all_airlines_this_date
 
+    # ONE extra API call for the return leg using cheapest outbound token
     cheapest_outbound = min(valid_flights, key=lambda f: f.get("price", 999999))
     cheapest_token    = cheapest_outbound.get("departure_token", "")
 
-    # ONE extra API call for the return leg, shared across all outbound rows
     ret_info = {}
     if cheapest_token:
         print(f"      → Fetching return leg via departure_token (1 extra call)...")
         ret_info = extract_return_info(cheapest_token)
+        if ret_info:
+            print(f"      ✓ Return leg captured: {ret_info.get('ret_airlines','')} {ret_info.get('ret_dep_time','')}")
+        else:
+            print(f"      ⚠ Return leg empty — will store blank fields")
 
-    # ── Build one record per outbound flight ──────────────────────────────────
     for flight in valid_flights:
         legs = flight.get("flights", [])
 
@@ -222,7 +229,6 @@ def parse_results(data, depart_date, return_date, season, checked_at):
             if fn:
                 out_flight_nums.append(fn)
 
-        # Deduplicate airlines preserving order
         seen = set()
         out_airlines_dedup = []
         for a in out_airlines:
@@ -245,7 +251,6 @@ def parse_results(data, depart_date, return_date, season, checked_at):
             "out_duration_fmt": format_duration(out_dur_min),
             "out_layover_min":  out_layover_min if out_stops > 0 else "",
             "out_layover_fmt":  format_duration(out_layover_min) if out_stops > 0 else "",
-            # Return leg — same for all rows (from cheapest outbound token)
             "ret_airlines":     ret_info.get("ret_airlines", ""),
             "ret_flight_nums":  ret_info.get("ret_flight_nums", ""),
             "ret_stops":        ret_info.get("ret_stops", ""),
