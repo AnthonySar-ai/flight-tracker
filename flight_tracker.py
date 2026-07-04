@@ -98,17 +98,21 @@ def search_outbound(depart_date, return_date):
     return resp.json()
 
 
-def search_return_leg(departure_token):
+def search_return_leg(departure_token, depart_date, return_date):
     """
     Second API call — uses departure_token to fetch return flights.
 
-    IMPORTANT: Do NOT pass type, outbound_date, return_date, departure_id,
-    or arrival_id here. The docs show the second call only needs engine,
-    departure_token, currency, hl, and api_key. Passing extra parameters
-    (especially type=1) causes a 400 Bad Request error.
+    Must include the same departure_id, arrival_id, outbound_date and
+    return_date from the first call alongside the departure_token.
+    Confirmed by SerpAPI support — omitting these causes a 400 error.
+    Do NOT include type here.
     """
     params = {
         "engine":          "google_flights",
+        "departure_id":    ORIGIN,
+        "arrival_id":      DESTINATION,
+        "outbound_date":   depart_date.strftime("%Y-%m-%d"),
+        "return_date":     return_date.strftime("%Y-%m-%d"),
         "departure_token": departure_token,
         "currency":        "EUR",
         "hl":              "en",
@@ -133,14 +137,14 @@ def clean_airline_name(name):
     return str(name).strip().strip('"').strip("'").strip()
 
 
-def extract_return_info(departure_token):
+def extract_return_info(departure_token, depart_date, return_date):
     """
     Fetches return flights using departure_token and returns a dict with
     the cheapest return leg's details. Returns an empty dict on failure.
     Called ONCE per date pair, not once per outbound result.
     """
     try:
-        data = search_return_leg(departure_token)
+        data = search_return_leg(departure_token, depart_date, return_date)
     except Exception as e:
         print(f"      ⚠ Return leg API call failed: {e}")
         return {}
@@ -203,7 +207,7 @@ def parse_results(data, depart_date, return_date, season, checked_at):
     ret_info = {}
     if cheapest_token:
         print(f"      → Fetching return leg via departure_token (1 extra call)...")
-        ret_info = extract_return_info(cheapest_token)
+        ret_info = extract_return_info(cheapest_token, depart_date, return_date)
         if ret_info:
             print(f"      ✓ Return leg captured: {ret_info.get('ret_airlines','')} {ret_info.get('ret_dep_time','')}")
         else:
